@@ -4,9 +4,9 @@ import json
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from .errors import SolverExecutionError, UnsupportedSolverModeError
 from .models import SimulationSpec
@@ -28,9 +28,12 @@ class SolverRunMetadata:
 class SolverArtifacts:
     run_dir: Path
     backend_mode: str
+    backend_status: str
     script_path: Path
     results_dir: Path
     metrics_path: Path
+    backend_status_path: Path
+    backend_metadata_path: Path
     run_metadata: SolverRunMetadata
     generated_files: list[Path] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -78,25 +81,55 @@ class FenicsSolver:
         results_dir = run_path / "results"
         results_dir.mkdir(exist_ok=True)
         metrics_path = results_dir / "metrics.json"
+        backend_status_path = run_path / "backend_status.json"
+        backend_metadata_path = run_path / "backend_metadata.json"
         stdout_path = run_path / "solver.stdout.log"
         stderr_path = run_path / "solver.stderr.log"
 
         if self.mode == "docker":
-            run_metadata = self._run_in_docker(script_path, stdout_path, stderr_path)
+            run_metadata = self._run_in_docker(
+                script_path,
+                run_path,
+                metrics_path,
+                backend_status_path,
+                backend_metadata_path,
+                stdout_path,
+                stderr_path,
+            )
         else:
-            run_metadata = self._run_mock(spec, metrics_path, stdout_path, stderr_path)
+            run_metadata = self._run_mock(
+                spec,
+                metrics_path,
+                backend_status_path,
+                backend_metadata_path,
+                stdout_path,
+                stderr_path,
+            )
 
         generated_files = [path for path in sorted(results_dir.iterdir()) if path.is_file()]
         warnings: list[str] = []
         if not metrics_path.exists():
             warnings.append("Solver backend did not produce metrics.json; post-processing may fall back to estimates.")
+        backend_status = "succeeded"
+        self._write_backend_artifacts(
+            backend_mode=self.mode,
+            backend_status=backend_status,
+            run_dir=run_path,
+            metrics_path=metrics_path,
+            backend_status_path=backend_status_path,
+            backend_metadata_path=backend_metadata_path,
+            run_metadata=run_metadata,
+        )
 
         return SolverArtifacts(
             run_dir=run_path,
             backend_mode=self.mode,
+            backend_status=backend_status,
             script_path=script_path,
             results_dir=results_dir,
             metrics_path=metrics_path,
+            backend_status_path=backend_status_path,
+            backend_metadata_path=backend_metadata_path,
             run_metadata=run_metadata,
             generated_files=generated_files,
             warnings=warnings,
@@ -105,6 +138,10 @@ class FenicsSolver:
     def _run_in_docker(
         self,
         script_path: Path,
+        run_path: Path,
+        metrics_path: Path,
+        backend_status_path: Path,
+        backend_metadata_path: Path,
         stdout_path: Path,
         stderr_path: Path,
     ) -> SolverRunMetadata:
@@ -144,11 +181,23 @@ class FenicsSolver:
                 stderr_path=stderr_path,
                 timed_out=True,
             )
+            self._write_backend_artifacts(
+                backend_mode="docker",
+                backend_status="timed_out",
+                run_dir=run_path,
+                metrics_path=metrics_path,
+                backend_status_path=backend_status_path,
+                backend_metadata_path=backend_metadata_path,
+                run_metadata=metadata,
+            )
             raise SolverExecutionError(
                 f"Docker solver timed out after {self.timeout_seconds} seconds.",
                 backend_mode="docker",
                 exit_code=metadata.exit_code,
                 command=metadata.command,
+                run_dir=run_path,
+                status_path=backend_status_path,
+                metadata_path=backend_metadata_path,
                 stdout_path=metadata.stdout_path,
                 stderr_path=metadata.stderr_path,
                 stdout_excerpt=metadata.stdout_excerpt,
@@ -164,11 +213,23 @@ class FenicsSolver:
                 stdout_path=stdout_path,
                 stderr_path=stderr_path,
             )
+            self._write_backend_artifacts(
+                backend_mode="docker",
+                backend_status="failed",
+                run_dir=run_path,
+                metrics_path=metrics_path,
+                backend_status_path=backend_status_path,
+                backend_metadata_path=backend_metadata_path,
+                run_metadata=metadata,
+            )
             raise SolverExecutionError(
                 "Docker solver execution failed.",
                 backend_mode="docker",
                 exit_code=metadata.exit_code,
                 command=metadata.command,
+                run_dir=run_path,
+                status_path=backend_status_path,
+                metadata_path=backend_metadata_path,
                 stdout_path=metadata.stdout_path,
                 stderr_path=metadata.stderr_path,
                 stdout_excerpt=metadata.stdout_excerpt,
@@ -179,6 +240,8 @@ class FenicsSolver:
         self,
         spec: SimulationSpec,
         metrics_path: Path,
+        backend_status_path: Path,
+        backend_metadata_path: Path,
         stdout_path: Path,
         stderr_path: Path,
     ) -> SolverRunMetadata:
@@ -227,6 +290,54 @@ class FenicsSolver:
         if isinstance(value, bytes):
             return value.decode("utf-8", errors="replace")
         return str(value)
+
+    def _write_backend_artifacts(
+        self,
+        *,
+        backend_mode: str,
+        backend_status: str,
+        run_dir: Path,
+        metrics_path: Path,
+        backend_status_path: Path,
+        backend_metadata_path: Path,
+        run_metadata: SolverRunMetadata,
+    ) -> None:
+        status_payload = {
+            "backend_mode": backend_mode,
+            "status": backend_status,
+            "exit_code": run_metadata.exit_code,
+            "timed_out": run_metadata.timed_out,
+            "metrics_path": str(metrics_path),
+            "metrics_present": metrics_path.exists(),
+        }
+        metadata_payload = {
+            "backend_mode": backend_mode,
+            "run_dir": str(run_dir),
+            "docker_image": self.docker_image if backend_mode == "docker" else None,
+            "docker_version": self._docker_version() if backend_mode == "docker" else None,
+            "timeout_seconds": self.timeout_seconds,
+            "run_metadata": self._metadata_to_json(run_metadata),
+        }
+        backend_status_path.write_text(json.dumps(status_payload, indent=2), encoding="utf-8")
+        backend_metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
+
+    def _metadata_to_json(self, metadata: SolverRunMetadata) -> dict[str, Any]:
+        payload = asdict(metadata)
+        payload["stdout_path"] = str(metadata.stdout_path)
+        payload["stderr_path"] = str(metadata.stderr_path)
+        return payload
+
+    def _docker_version(self) -> str:
+        try:
+            completed = subprocess.run(
+                ["docker", "--version"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return (completed.stdout or completed.stderr or "").strip()
+        except Exception:
+            return ""
 
 
 __all__ = ["FenicsSolver", "SolverArtifacts", "SolverRunMetadata"]

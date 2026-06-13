@@ -21,7 +21,7 @@ from .models import (
 from .parser import PromptParser
 from .generator import FenicsScriptGenerator
 from .solver import FenicsSolver, SolverRunMetadata
-from .postprocessor import ResultPostProcessor
+from .postprocessor import MetricsCollectionResult, ResultPostProcessor
 from .visualizer import SimulationVisualizer
 from .summarizer import ResultSummarizer
 from .service import SimulationRunResult, SimulationService
@@ -36,6 +36,7 @@ __all__ = [
     "LoadCase",
     "LoadType",
     "MaterialSpec",
+    "MetricsCollectionResult",
     "PlateDimensions",
     "PromptParseError",
     "PromptParser",

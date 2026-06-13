@@ -29,6 +29,9 @@ class SolverExecutionError(FEACopilotError):
         backend_mode: str,
         exit_code: Optional[int] = None,
         command: Optional[list[str]] = None,
+        run_dir: Optional[Path] = None,
+        status_path: Optional[Path] = None,
+        metadata_path: Optional[Path] = None,
         stdout_path: Optional[Path] = None,
         stderr_path: Optional[Path] = None,
         stdout_excerpt: str = "",
@@ -39,6 +42,9 @@ class SolverExecutionError(FEACopilotError):
         self.backend_mode = backend_mode
         self.exit_code = exit_code
         self.command = command or []
+        self.run_dir = run_dir
+        self.status_path = status_path
+        self.metadata_path = metadata_path
         self.stdout_path = stdout_path
         self.stderr_path = stderr_path
         self.stdout_excerpt = stdout_excerpt
@@ -54,9 +60,15 @@ class SimulationRunError(FEACopilotError):
         message: str,
         *,
         backend_mode: Optional[str] = None,
+        run_dir: Optional[Path] = None,
+        status_path: Optional[Path] = None,
+        metadata_path: Optional[Path] = None,
     ) -> None:
         super().__init__(message)
         self.backend_mode = backend_mode
+        self.run_dir = run_dir
+        self.status_path = status_path
+        self.metadata_path = metadata_path
 
     @classmethod
     def from_solver_error(cls, error: SolverExecutionError) -> "SimulationRunError":
@@ -78,4 +90,15 @@ class SimulationRunError(FEACopilotError):
         elif error.stdout_path is not None:
             details.append(f"log: {error.stdout_path}")
 
-        return cls(" ".join(details), backend_mode=error.backend_mode)
+        if error.status_path is not None:
+            details.append(f"status: {error.status_path}")
+        if error.metadata_path is not None:
+            details.append(f"metadata: {error.metadata_path}")
+
+        return cls(
+            " ".join(details),
+            backend_mode=error.backend_mode,
+            run_dir=error.run_dir,
+            status_path=error.status_path,
+            metadata_path=error.metadata_path,
+        )

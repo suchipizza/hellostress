@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 
 from fea_engine import BeamSection, LoadCase, SimulationRunError, SimulationService, SimulationSpec, SolverExecutionError
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
+from fea_engine.postprocessor import MetricsCollectionResult
 from fea_engine.solver import SolverArtifacts, SolverRunMetadata
 
 
@@ -48,9 +50,9 @@ class StubPostProcessor:
         self.metrics = metrics
         self.calls: list[tuple[SimulationSpec, SolverArtifacts]] = []
 
-    def collect_metrics(self, spec: SimulationSpec, artifacts: SolverArtifacts) -> dict[str, float]:
+    def collect_metrics(self, spec: SimulationSpec, artifacts: SolverArtifacts) -> MetricsCollectionResult:
         self.calls.append((spec, artifacts))
-        return self.metrics
+        return MetricsCollectionResult(metrics=self.metrics, source="solver_artifact")
 
 
 class StubVisualizer:
@@ -100,9 +102,12 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     artifacts = SolverArtifacts(
         run_dir=tmp_path,
         backend_mode="mock",
+        backend_status="succeeded",
         script_path=tmp_path / "simulation.py",
         results_dir=tmp_path / "results",
         metrics_path=tmp_path / "results" / "metrics.json",
+        backend_status_path=tmp_path / "backend_status.json",
+        backend_metadata_path=tmp_path / "backend_metadata.json",
         run_metadata=SolverRunMetadata(
             command=["mock"],
             exit_code=0,
@@ -154,10 +159,18 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     assert result.spec is spec
     assert result.script == "generated-script"
     assert result.artifacts == artifacts
+    assert result.status == "completed"
+    assert result.metrics_source == "solver_artifact"
+    assert result.fallback_used is False
+    assert result.warnings == []
+    assert result.result_schema_path.exists()
     assert result.metrics == {"max_deflection": 1.2e-3, "max_stress": 2.4e6}
     assert result.figure is figure
     assert result.summary == "summary"
     assert result.solver_mode == "mock"
+    schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["status"] == "completed"
+    assert schema_payload["metrics_source"] == "solver_artifact"
 
 
 def test_service_runs_real_mock_pipeline() -> None:
@@ -174,6 +187,7 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.script.strip()
     assert result.artifacts.run_dir.exists()
     assert result.artifacts.backend_mode == "mock"
+    assert result.artifacts.backend_status == "succeeded"
     assert result.artifacts.run_metadata.command == ["mock"]
     assert result.artifacts.run_metadata.exit_code == 0
     assert result.artifacts.run_metadata.stdout_path.exists()
@@ -182,6 +196,11 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.artifacts.metrics_path.exists()
     assert result.artifacts.generated_files == [result.artifacts.metrics_path]
     assert result.artifacts.warnings == []
+    assert result.status == "completed"
+    assert result.metrics_source == "solver_artifact"
+    assert result.fallback_used is False
+    assert result.warnings == []
+    assert result.result_schema_path.exists()
     assert result.metrics["max_deflection"] > 0
     assert result.metrics["max_stress"] > 0
     assert result.summary
@@ -212,3 +231,68 @@ def test_service_normalizes_solver_failures() -> None:
 
     assert "Solver backend 'docker' failed with exit code 125." in str(exc_info.value)
     assert "stderr: container boot failed" in str(exc_info.value)
+
+
+def test_service_marks_fallback_runs(tmp_path: Path) -> None:
+    spec = build_beam_spec()
+    parser = StubParser(spec)
+    generator = StubGenerator()
+    run_dir = tmp_path / "run"
+    results_dir = run_dir / "results"
+    results_dir.mkdir(parents=True)
+    stdout_path = run_dir / "solver.stdout.log"
+    stderr_path = run_dir / "solver.stderr.log"
+    stdout_path.write_text("stdout", encoding="utf-8")
+    stderr_path.write_text("", encoding="utf-8")
+    backend_status_path = run_dir / "backend_status.json"
+    backend_status_path.write_text(
+        json.dumps({"backend_mode": "docker", "status": "succeeded", "metrics_present": False}),
+        encoding="utf-8",
+    )
+    backend_metadata_path = run_dir / "backend_metadata.json"
+    backend_metadata_path.write_text(json.dumps({"backend_mode": "docker"}), encoding="utf-8")
+    artifacts = SolverArtifacts(
+        run_dir=run_dir,
+        backend_mode="docker",
+        backend_status="succeeded",
+        script_path=run_dir / "simulation.py",
+        results_dir=results_dir,
+        metrics_path=results_dir / "metrics.json",
+        backend_status_path=backend_status_path,
+        backend_metadata_path=backend_metadata_path,
+        run_metadata=SolverRunMetadata(
+            command=["docker", "run"],
+            exit_code=0,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+        ),
+        warnings=["Solver backend did not produce metrics.json; post-processing may fall back to estimates."],
+    )
+    seen_specs: list[SimulationSpec] = []
+    seen_scripts: list[str] = []
+    solver = StubSolver("docker", artifacts, seen_specs, seen_scripts)
+    visualizer = StubVisualizer(go.Figure())
+    summarizer = StubSummarizer("summary")
+
+    service = SimulationService(
+        parser=parser,
+        generator=generator,
+        visualizer=visualizer,
+        summarizer=summarizer,
+        solver_factory=lambda mode: solver,
+    )
+
+    result = service.run_simulation(
+        prompt="beam prompt",
+        mesh_density=48,
+        solver_mode="docker",
+    )
+
+    assert result.status == "completed_with_fallback"
+    assert result.metrics_source == "analytical_fallback"
+    assert result.fallback_used is True
+    assert any("analytical fallback estimate used" in warning for warning in result.warnings)
+    schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["status"] == "completed_with_fallback"
+    assert schema_payload["fallback_used"] is True
+    assert schema_payload["metrics_source"] == "analytical_fallback"

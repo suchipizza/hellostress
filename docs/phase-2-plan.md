@@ -12,6 +12,7 @@ Phase 2 is the backend hardening round. The goal is to move the project from a c
 - Host-local solver execution has been removed from the supported backend path.
 - `SolverArtifacts` now carries a stricter run contract for post-processing and service orchestration.
 - Docker and mock runs now capture structured stdout/stderr metadata, and backend failures are normalized through the service layer.
+- Explicit `backend_status.json`, `backend_metadata.json`, and `run_result.json` artifacts are now written for successful runs, and failure paths write backend status/metadata artifacts before raising.
 
 ## Workstreams
 
@@ -54,7 +55,7 @@ Acceptance:
 
 Status:
 
-- Initial contract implemented. Future work should extend it with richer metadata and hardened docker diagnostics.
+- Expanded contract implemented. Future work should extend it with richer container/runtime metadata and cleanup policies.
 
 ### 4. Harden Docker solver execution
 
@@ -67,7 +68,7 @@ Acceptance:
 
 Status:
 
-- In progress. Structured stdout/stderr capture and service-level failure normalization are implemented; cleanup and richer backend metadata are the next hardening targets.
+- In progress. Structured stdout/stderr capture, backend artifact files, and service-level failure normalization are implemented; cleanup guarantees and deeper runtime inspection are the next hardening targets.
 
 ### 5. Add integration coverage for backend execution
 

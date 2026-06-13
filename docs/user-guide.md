@@ -27,6 +27,7 @@ FEA Copilot converts a narrow set of natural-language beam and plate prompts int
 - Supported solver backends are `mock`, `docker`, and `auto`.
 - Host-local solver execution is intentionally not supported.
 - Backend failures are normalized into user-facing solver errors with log context.
+- Successful runs now include backend status and metadata artifacts in the run directory for debugging.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 
 ## Troubleshooting

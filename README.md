@@ -62,13 +62,24 @@ PYTHONPATH=. pytest -q
 The current service and backend path produces a structured solver artifact contract:
 
 - `backend_mode`: resolved backend used for execution
+- `backend_status`: normalized backend status such as `succeeded`, `failed`, or `timed_out`
 - `run_dir`: working directory for the run
 - `script_path`: generated simulation script written for the run
 - `results_dir`: directory for solver outputs
 - `metrics_path`: expected `metrics.json` path
+- `backend_status_path`: JSON file describing backend execution status
+- `backend_metadata_path`: JSON file describing backend metadata such as Docker image/version
 - `run_metadata`: structured command, exit code, timeout, and stdout/stderr diagnostics
 - `generated_files`: files actually produced by the backend
 - `warnings`: contract or backend warnings surfaced to the application layer
+
+The service layer also writes `run_result.json`, which normalizes:
+
+- final application status
+- backend execution status
+- metrics source
+- whether analytical fallback was used
+- warning aggregation across backend and post-processing
 
 ## Contributing
 
