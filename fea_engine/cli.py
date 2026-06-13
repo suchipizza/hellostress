@@ -8,7 +8,13 @@ from typing import Callable, Optional, Sequence, TextIO
 
 from dotenv import load_dotenv
 
-from .artifacts import build_bundle_summary, cleanup_run_workspace, export_artifact_bundle, load_artifact_bundle
+from .artifacts import (
+    build_bundle_summary,
+    build_cleanup_summary,
+    cleanup_run_workspace,
+    export_artifact_bundle,
+    load_artifact_bundle,
+)
 from .errors import FEACopilotError
 from .presentation import spec_to_display_dict
 from .service import SimulationRunResult, SimulationService
@@ -240,10 +246,13 @@ def export_to_payload(
     if run_result_path is None:
         raise AssertionError("Export validation should happen in argparse.")
     bundle = load_artifact_bundle(run_result_path)
-    archive_path = export_artifact_bundle(run_result_path, output_path=export_output)
+    export_result = export_artifact_bundle(run_result_path, output_path=export_output)
     return {
         "export_mode": True,
-        "archive_path": str(archive_path),
+        "archive_path": str(export_result.archive_path),
+        "archive_sha256": export_result.archive_sha256,
+        "manifest_name": export_result.manifest_name,
+        "manifest": export_result.manifest,
         "run_result_path": str(bundle.run_result_path),
         "run_dir": bundle.run_result["artifacts"]["run_dir"],
         "backend_mode": bundle.run_result["backend_mode"],
@@ -266,16 +275,11 @@ def cleanup_to_payload(
         keep_latest=keep_latest,
         dry_run=dry_run,
     )
-    return {
+    payload = {
         "cleanup_mode": True,
-        "workspace": str(result.workspace),
-        "retention_days": result.retention_days,
-        "keep_latest": result.keep_latest,
-        "dry_run": result.dry_run,
-        "deleted_runs": [str(path) for path in result.deleted_runs],
-        "retained_runs": [str(path) for path in result.retained_runs],
-        "skipped_paths": [str(path) for path in result.skipped_paths],
     }
+    payload.update(build_cleanup_summary(result))
+    return payload
 
 
 def render_text_summary(payload: dict[str, object]) -> str:
@@ -354,20 +358,25 @@ def render_export_summary(payload: dict[str, object]) -> str:
         f"Run result: {payload['run_result_path']}",
         f"Run dir: {payload['run_dir']}",
         f"Archive: {payload['archive_path']}",
+        f"Archive sha256: {payload['archive_sha256']}",
+        f"Manifest: {payload['manifest_name']}",
+        f"Manifest file count: {payload['manifest']['file_count']}",
     ]
     return "\n".join(lines) + "\n"
 
 
 def render_cleanup_summary(payload: dict[str, object]) -> str:
+    summary = payload["summary"]
     lines = [
         "Cleanup: completed",
         f"Workspace: {payload['workspace']}",
         f"Retention days: {payload['retention_days']}",
         f"Keep latest: {payload['keep_latest']}",
         f"Dry run: {payload['dry_run']}",
-        f"Deleted runs: {len(payload['deleted_runs'])}",
-        f"Retained runs: {len(payload['retained_runs'])}",
-        f"Skipped paths: {len(payload['skipped_paths'])}",
+        f"Discovered runs: {summary['discovered_count']}",
+        f"Deleted runs: {summary['deleted_count']}",
+        f"Retained runs: {summary['retained_count']}",
+        f"Skipped paths: {summary['skipped_count']}",
     ]
     return "\n".join(lines) + "\n"
 

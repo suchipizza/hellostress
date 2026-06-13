@@ -50,8 +50,8 @@ feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
 - The CLI writes the same backend artifacts as the app, including `run_result.json`.
 - Run artifacts now include a `schema_version` field for contract validation.
 - The CLI inspection command now reports compatibility status, referenced file presence, and artifact consistency checks.
-- The CLI export command writes a validated zip archive of a completed run.
-- The CLI cleanup command applies retention rules to the run workspace and can preview deletions with `--dry-run`.
+- The CLI export command writes a validated zip archive of a completed run and includes `export-manifest.json` with file checksums.
+- The CLI cleanup command applies retention rules to the run workspace, can preview deletions with `--dry-run`, and returns summary counts in JSON mode.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 
 ## Runtime Defaults

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fea_engine import (
     ARTIFACT_SCHEMA_VERSION,
+    EXPORT_MANIFEST_NAME,
     MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
     RuntimeSettings,
     SimulationRunError,
@@ -202,17 +203,24 @@ def test_cli_can_export_run_bundle(tmp_path: Path) -> None:
     archive_path = tmp_path / "export.zip"
 
     export_stdout = io.StringIO()
+    export_stderr = io.StringIO()
     export_exit_code = main(
-        ["--export-run-result", run_result_path, "--export-output", str(archive_path)],
+        ["--export-run-result", run_result_path, "--export-output", str(archive_path), "--output", "json"],
         stdout=export_stdout,
-        stderr=io.StringIO(),
+        stderr=export_stderr,
     )
 
+    export_payload = json.loads(export_stdout.getvalue())
     assert export_exit_code == 0
+    assert export_stderr.getvalue() == ""
     assert archive_path.exists()
-    assert "Export: completed" in export_stdout.getvalue()
+    assert export_payload["archive_sha256"]
+    assert export_payload["manifest_name"] == EXPORT_MANIFEST_NAME
+    assert export_payload["manifest"]["file_count"] >= 7
     with zipfile.ZipFile(archive_path) as archive:
-        assert "run_result.json" in set(archive.namelist())
+        names = set(archive.namelist())
+    assert "run_result.json" in names
+    assert EXPORT_MANIFEST_NAME in names
 
 
 def test_cli_can_cleanup_workspace_with_dry_run(tmp_path: Path) -> None:
@@ -241,6 +249,7 @@ def test_cli_can_cleanup_workspace_with_dry_run(tmp_path: Path) -> None:
     os.utime(old_run_dir, (old_time, old_time))
 
     cleanup_stdout = io.StringIO()
+    cleanup_stderr = io.StringIO()
     cleanup_exit_code = main(
         [
             "--cleanup-runs",
@@ -251,13 +260,17 @@ def test_cli_can_cleanup_workspace_with_dry_run(tmp_path: Path) -> None:
             "--keep-latest",
             "1",
             "--dry-run",
+            "--output",
+            "json",
         ],
         stdout=cleanup_stdout,
-        stderr=io.StringIO(),
+        stderr=cleanup_stderr,
     )
 
-    output = cleanup_stdout.getvalue()
+    payload = json.loads(cleanup_stdout.getvalue())
     assert cleanup_exit_code == 0
-    assert "Cleanup: completed" in output
-    assert "Deleted runs: 1" in output
+    assert cleanup_stderr.getvalue() == ""
+    assert payload["summary"]["deleted_count"] == 1
+    assert payload["summary"]["retained_count"] == 1
+    assert payload["deleted_run_names"] == [old_run_dir.name]
     assert old_run_dir.exists() is True

@@ -5,6 +5,7 @@ import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,8 @@ from .errors import ArtifactValidationError, ArtifactWorkflowError
 ARTIFACT_SCHEMA_VERSION = 1
 MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION = 1
 MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION = ARTIFACT_SCHEMA_VERSION
+EXPORT_MANIFEST_VERSION = 1
+EXPORT_MANIFEST_NAME = "export-manifest.json"
 
 RUN_RESULT_REQUIRED_KEYS = {
     "schema_version",
@@ -74,6 +77,14 @@ class RetentionCleanupResult:
     deleted_runs: list[Path]
     retained_runs: list[Path]
     skipped_paths: list[Path]
+
+
+@dataclass(frozen=True)
+class ArtifactExportResult:
+    archive_path: Path
+    archive_sha256: str
+    manifest_name: str
+    manifest: dict[str, Any]
 
 
 def load_artifact_bundle(run_result_path: Path) -> ArtifactBundle:
@@ -163,7 +174,7 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
     }
 
 
-def export_artifact_bundle(run_result_path: Path, output_path: Path | None = None) -> Path:
+def export_artifact_bundle(run_result_path: Path, output_path: Path | None = None) -> ArtifactExportResult:
     bundle = load_artifact_bundle(run_result_path)
     run_dir = Path(bundle.run_result["artifacts"]["run_dir"]).resolve()
     if output_path is None:
@@ -172,10 +183,17 @@ def export_artifact_bundle(run_result_path: Path, output_path: Path | None = Non
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     files_to_export = _bundle_files(bundle)
+    manifest = _build_export_manifest(bundle, run_dir, files_to_export)
     with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in files_to_export:
             archive.write(path, arcname=str(path.relative_to(run_dir)))
-    return output_path
+        archive.writestr(EXPORT_MANIFEST_NAME, json.dumps(manifest, indent=2))
+    return ArtifactExportResult(
+        archive_path=output_path,
+        archive_sha256=_compute_file_sha256(output_path),
+        manifest_name=EXPORT_MANIFEST_NAME,
+        manifest=manifest,
+    )
 
 
 def cleanup_run_workspace(
@@ -234,6 +252,27 @@ def cleanup_run_workspace(
         retained_runs=retained_runs,
         skipped_paths=skipped_paths,
     )
+
+
+def build_cleanup_summary(result: RetentionCleanupResult) -> dict[str, Any]:
+    return {
+        "workspace": str(result.workspace),
+        "retention_days": result.retention_days,
+        "keep_latest": result.keep_latest,
+        "dry_run": result.dry_run,
+        "summary": {
+            "deleted_count": len(result.deleted_runs),
+            "retained_count": len(result.retained_runs),
+            "skipped_count": len(result.skipped_paths),
+            "discovered_count": len(result.deleted_runs) + len(result.retained_runs) + len(result.skipped_paths),
+        },
+        "deleted_runs": [str(path) for path in result.deleted_runs],
+        "retained_runs": [str(path) for path in result.retained_runs],
+        "skipped_paths": [str(path) for path in result.skipped_paths],
+        "deleted_run_names": [path.name for path in result.deleted_runs],
+        "retained_run_names": [path.name for path in result.retained_runs],
+        "skipped_path_names": [path.name for path in result.skipped_paths],
+    }
 
 
 def _load_json(path: Path, *, artifact_name: str) -> dict[str, Any]:
@@ -347,6 +386,30 @@ def _bundle_files(bundle: ArtifactBundle) -> list[Path]:
     return files
 
 
+def _build_export_manifest(bundle: ArtifactBundle, run_dir: Path, files_to_export: list[Path]) -> dict[str, Any]:
+    file_entries: list[dict[str, Any]] = []
+    for path in files_to_export:
+        stat = path.stat()
+        file_entries.append(
+            {
+                "relative_path": str(path.relative_to(run_dir)),
+                "size_bytes": stat.st_size,
+                "sha256": _compute_file_sha256(path),
+            }
+        )
+    return {
+        "manifest_version": EXPORT_MANIFEST_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "schema_version": bundle.run_result["schema_version"],
+        "run_status": bundle.run_result["status"],
+        "backend_mode": bundle.run_result["backend_mode"],
+        "backend_status": bundle.run_result["backend_status"],
+        "run_dir_name": run_dir.name,
+        "file_count": len(file_entries),
+        "files": file_entries,
+    }
+
+
 def _discover_run_dirs(workspace: Path) -> list[Path]:
     if not workspace.exists():
         return []
@@ -358,6 +421,17 @@ def _run_sort_key(run_dir: Path) -> float:
     if run_result_path.exists():
         return run_result_path.stat().st_mtime
     return run_dir.stat().st_mtime
+
+
+def _compute_file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(65536)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _coerce_path(value: Any, field_name: str, run_result_path: Path) -> Path:
@@ -377,10 +451,14 @@ def _with_path(message: str, path: Path | None) -> str:
 __all__ = [
     "ARTIFACT_SCHEMA_VERSION",
     "ArtifactBundle",
+    "ArtifactExportResult",
+    "EXPORT_MANIFEST_NAME",
+    "EXPORT_MANIFEST_VERSION",
     "MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "RetentionCleanupResult",
     "build_bundle_summary",
+    "build_cleanup_summary",
     "cleanup_run_workspace",
     "export_artifact_bundle",
     "load_artifact_bundle",

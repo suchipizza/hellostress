@@ -9,9 +9,12 @@ import pytest
 
 from fea_engine import (
     ARTIFACT_SCHEMA_VERSION,
+    EXPORT_MANIFEST_NAME,
+    EXPORT_MANIFEST_VERSION,
     MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
     ArtifactValidationError,
     build_bundle_summary,
+    build_cleanup_summary,
     cleanup_run_workspace,
     export_artifact_bundle,
     load_artifact_bundle,
@@ -163,11 +166,13 @@ def test_build_bundle_summary_reports_inconsistent_embedded_payloads(tmp_path: P
 
 def test_export_artifact_bundle_writes_zip_with_expected_files(tmp_path: Path) -> None:
     run_result_path = write_bundle(tmp_path)
-    archive_path = export_artifact_bundle(run_result_path)
+    export_result = export_artifact_bundle(run_result_path)
+    archive_path = export_result.archive_path
 
     assert archive_path.exists()
     with zipfile.ZipFile(archive_path) as archive:
         names = set(archive.namelist())
+        manifest_payload = json.loads(archive.read(EXPORT_MANIFEST_NAME).decode("utf-8"))
     assert "run_result.json" in names
     assert "backend_status.json" in names
     assert "backend_metadata.json" in names
@@ -175,6 +180,15 @@ def test_export_artifact_bundle_writes_zip_with_expected_files(tmp_path: Path) -
     assert "results/metrics.json" in names
     assert "solver.stdout.log" in names
     assert "solver.stderr.log" in names
+    assert EXPORT_MANIFEST_NAME in names
+    assert export_result.archive_sha256
+    assert manifest_payload["manifest_version"] == EXPORT_MANIFEST_VERSION
+    assert manifest_payload["file_count"] >= 7
+    manifest_paths = {entry["relative_path"] for entry in manifest_payload["files"]}
+    assert "run_result.json" in manifest_paths
+    assert "results/metrics.json" in manifest_paths
+    for entry in manifest_payload["files"]:
+        assert len(entry["sha256"]) == 64
 
 
 def test_cleanup_run_workspace_deletes_old_runs_and_keeps_latest(tmp_path: Path) -> None:
@@ -217,3 +231,7 @@ def test_cleanup_run_workspace_dry_run_keeps_files(tmp_path: Path) -> None:
 
     assert len(result.deleted_runs) == 1
     assert old_run.parent.exists() is True
+    summary = build_cleanup_summary(result)
+    assert summary["summary"]["deleted_count"] == 1
+    assert summary["summary"]["retained_count"] == 0
+    assert summary["deleted_run_names"] == ["old-run"]
