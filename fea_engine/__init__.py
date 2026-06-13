@@ -1,6 +1,7 @@
 """Core FEA Copilot engine modules."""
 
 from .errors import (
+    ConfigurationError,
     FEACopilotError,
     PromptParseError,
     SimulationRunError,
@@ -26,11 +27,13 @@ from .presentation import spec_to_display_dict
 from .visualizer import SimulationVisualizer
 from .summarizer import ResultSummarizer
 from .service import SimulationRunResult, SimulationService
+from .settings import RuntimeSettings
 from .validation import SimulationSpecValidator
 
 __all__ = [
     "BeamSection",
     "BackendRuntimeMetadata",
+    "ConfigurationError",
     "FEACopilotError",
     "GeometryType",
     "SimulationSpec",
@@ -51,6 +54,7 @@ __all__ = [
     "SimulationRunResult",
     "SimulationService",
     "SimulationVisualizer",
+    "RuntimeSettings",
     "ResultSummarizer",
     "spec_to_display_dict",
     "SimulationSpecValidator",

@@ -9,9 +9,11 @@ import plotly.graph_objects as go
 
 from .errors import SimulationRunError, SolverExecutionError
 from .generator import FenicsScriptGenerator
+from .llm_client import OpenAILLMClient
 from .models import SimulationSpec
 from .parser import PromptParser
 from .postprocessor import MetricsCollectionResult, ResultPostProcessor
+from .settings import RuntimeSettings
 from .solver import FenicsSolver, SolverArtifacts
 from .summarizer import ResultSummarizer
 from .visualizer import SimulationVisualizer
@@ -42,6 +44,7 @@ class SimulationService:
 
     def __init__(
         self,
+        settings: Optional[RuntimeSettings] = None,
         parser: Optional[PromptParser] = None,
         generator: Optional[FenicsScriptGenerator] = None,
         postprocessor: Optional[ResultPostProcessor] = None,
@@ -49,11 +52,15 @@ class SimulationService:
         summarizer: Optional[ResultSummarizer] = None,
         solver_factory: Optional[SolverFactory] = None,
     ) -> None:
-        self.parser = parser or PromptParser()
+        self.settings = settings or RuntimeSettings.from_env()
+        llm_client = OpenAILLMClient(model=self.settings.openai_model)
+        self.parser = parser or PromptParser(llm_client=llm_client)
         self.generator = generator or FenicsScriptGenerator()
         self.postprocessor = postprocessor or ResultPostProcessor()
         self.visualizer = visualizer or SimulationVisualizer()
-        self.summarizer = summarizer or ResultSummarizer()
+        self.summarizer = summarizer or ResultSummarizer(
+            llm_client=OpenAILLMClient(model=self.settings.openai_model)
+        )
         self.solver_factory = solver_factory or self._default_solver_factory
 
     def run_simulation(
@@ -106,7 +113,7 @@ class SimulationService:
         )
 
     def _default_solver_factory(self, solver_mode: str) -> FenicsSolver:
-        return FenicsSolver(mode=solver_mode)
+        return self.settings.build_solver(requested_mode=solver_mode)
 
     def _emit(
         self,

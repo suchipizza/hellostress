@@ -4,7 +4,9 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from fea_engine import (
+    ConfigurationError,
     FEACopilotError,
+    RuntimeSettings,
     SimulationService,
 )
 from fea_engine.presentation import spec_to_display_dict
@@ -23,10 +25,28 @@ EXAMPLE_PROMPTS = {
     "Simply supported plate": "Analyze a 0.5 m by 0.3 m aluminum plate 5 mm thick under a uniform pressure of 50 kPa.",
 }
 
+try:
+    runtime_settings = RuntimeSettings.from_env()
+except ConfigurationError as exc:
+    st.error(str(exc))
+    st.stop()
+
+solver_modes = ["mock", "docker", "auto"]
+
 with st.sidebar:
     st.header("Settings")
-    solver_mode = st.selectbox("Solver mode", ["mock", "docker", "auto"], index=0)
-    mesh_density = st.slider("Mesh density", min_value=12, max_value=80, value=32, step=4)
+    solver_mode = st.selectbox(
+        "Solver mode",
+        solver_modes,
+        index=solver_modes.index(runtime_settings.default_solver_mode),
+    )
+    mesh_density = st.slider(
+        "Mesh density",
+        min_value=12,
+        max_value=80,
+        value=runtime_settings.default_mesh_density,
+        step=4,
+    )
     selected_example = st.selectbox("Example prompt", list(EXAMPLE_PROMPTS.keys()), index=0)
     if st.button("Use example"):
         st.session_state["prompt_text"] = EXAMPLE_PROMPTS[selected_example]
@@ -39,7 +59,7 @@ prompt = st.text_area("Simulation prompt", value=prompt_default, height=140)
 run_clicked = st.button("Run simulation", type="primary")
 status_placeholder = st.empty()
 
-simulation_service = SimulationService()
+simulation_service = SimulationService(settings=runtime_settings)
 
 if run_clicked:
     if not prompt.strip():

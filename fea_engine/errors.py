@@ -20,6 +20,10 @@ class UnsupportedSolverModeError(FEACopilotError):
     """Raised when the requested solver mode is not supported."""
 
 
+class ConfigurationError(FEACopilotError):
+    """Raised when runtime configuration is invalid."""
+
+
 class SolverExecutionError(FEACopilotError):
     """Raised when a supported solver backend fails to execute."""
 

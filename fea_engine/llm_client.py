@@ -50,11 +50,11 @@ class OpenAILLMClient:
 
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: Optional[str] = None,
         temperature: float = 0.1,
         api_key: Optional[str] = None,
     ) -> None:
-        self.model = model
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.temperature = temperature
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self._client = OpenAI(api_key=self.api_key) if self.api_key and OpenAI else None

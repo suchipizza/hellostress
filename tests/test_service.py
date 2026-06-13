@@ -7,7 +7,15 @@ from pathlib import Path
 import plotly.graph_objects as go
 import pytest
 
-from fea_engine import BeamSection, LoadCase, SimulationRunError, SimulationService, SimulationSpec, SolverExecutionError
+from fea_engine import (
+    BeamSection,
+    LoadCase,
+    RuntimeSettings,
+    SimulationRunError,
+    SimulationService,
+    SimulationSpec,
+    SolverExecutionError,
+)
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
 from fea_engine.postprocessor import MetricsCollectionResult
 from fea_engine.solver import BackendRuntimeMetadata, SolverArtifacts, SolverRunMetadata
@@ -212,6 +220,31 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.result_schema_path.exists()
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
     assert schema_payload["runtime_metadata"]["cleanup_status"] == "not_applicable"
+
+
+def test_service_uses_runtime_settings_for_default_dependencies(tmp_path: Path) -> None:
+    settings = RuntimeSettings(
+        default_solver_mode="mock",
+        default_mesh_density=36,
+        docker_image="custom/dolfinx:latest",
+        solver_timeout_seconds=45,
+        runs_workspace=tmp_path / "runs",
+        openai_model="gpt-4.1-mini",
+    )
+
+    service = SimulationService(settings=settings)
+
+    result = service.run_simulation(
+        prompt="Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load.",
+        mesh_density=settings.default_mesh_density,
+        solver_mode=settings.default_solver_mode,
+    )
+
+    assert service.parser.llm_client.model == "gpt-4.1-mini"
+    assert service.summarizer.llm_client.model == "gpt-4.1-mini"
+    assert result.spec.mesh_density == 36
+    assert result.artifacts.run_dir.parent == settings.runs_workspace
+    assert result.artifacts.run_metadata.command == ["mock"]
 
 
 def test_service_normalizes_solver_failures() -> None:
