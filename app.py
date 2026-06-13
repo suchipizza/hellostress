@@ -20,7 +20,7 @@ from fea_engine.models import SimulationSpec
 load_dotenv()
 
 st.set_page_config(page_title="FEA Copilot", layout="wide")
-st.title(" HelloStress - FEA Copilot")
+st.title("HelloStress - FEA Copilot")
 st.write(
     "Describe a simple beam or plate scenario in plain English. We'll parse it, "
     "generate a FEniCS script, and provide quick insights."

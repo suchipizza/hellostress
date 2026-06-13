@@ -27,6 +27,12 @@ Phase 1 establishes a stricter contract around parsing and validation:
 - Validation is separate from parsing so future API entry points can reuse the same rules.
 - Golden tests are used to catch unintended script-template regressions.
 
+## Repository Standards
+
+- Use `PYTHONPATH=. pytest -q` for local test runs.
+- Keep local tooling artifacts out of Git via `.gitignore`.
+- Treat `app.py` as the current UI shell, not the long-term orchestration layer.
+
 ## Next Documentation Targets
 
 - Deployment guide for containerized execution

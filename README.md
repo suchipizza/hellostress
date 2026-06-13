@@ -1,97 +1,95 @@
 # 🧠 FEA Copilot
 
-Natural-language assistant that converts prompts for simple beam/plate simulations into FEniCS scripts, runs them, and visualizes the results in Streamlit.
+FEA Copilot is a Streamlit-based prototype that converts a narrow class of natural-language structural prompts into structured simulation specs, generated FEniCS scripts, quick estimates, and result summaries.
+
+The repository is now on a clean open-source `main` branch with Phase 1 correctness work in place:
+
+- explicit beam and plate data models
+- parser validation and typed user-facing errors
+- parser regression tests and golden script tests
+- user and developer documentation
+
+## Current Scope
+
+This project is intentionally narrow right now.
+
+- Supported beam prompts must clearly include geometry, section size, and a load with units.
+- Supported plate prompts must clearly include rectangular plan dimensions, thickness, and pressure with units.
+- Mock mode provides analytical estimates.
+- Docker mode is the intended path for generated FEniCS execution.
+
+Unsupported or ambiguous prompts should fail clearly rather than return plausible nonsense.
 
 ## Quick Start
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 streamlit run app.py
 ```
 
-The app defaults to a fast **mock** solver that uses analytical closed-form estimates. Switch to `docker` mode in the sidebar to execute the generated script with FEniCS:
+The app defaults to the fast `mock` solver. To prepare Docker-backed execution:
 
 ```bash
 docker pull dolfinx/dolfinx:v0.7.3
 ```
 
+## Example Prompts
+
+- `Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load.`
+- `Analyze a 0.5 m by 0.3 m aluminum plate 5 mm thick under a uniform pressure of 50 kPa.`
+
 ## Environment Variables
 
-- `OPENAI_API_KEY` – optional. Enables GPT-assisted parsing + result summarization.
-- `OPENAI_MODEL` – override the default `gpt-4o-mini` model name (optional).
+- `OPENAI_API_KEY`: optional. Enables GPT-assisted parsing and summarization.
+- `OPENAI_MODEL`: optional model override for the OpenAI client.
 
-You can create a `.env` file in the project root so the Streamlit app picks it up automatically.
+You can place these in a local `.env` file.
 
-## Documentation
+## Local Development
 
-- User guide: [docs/user-guide.md](docs/user-guide.md)
-- Developer guide: [docs/developer-guide.md](docs/developer-guide.md)
+Run the checks used in this repository:
 
-## Project Layout
+```bash
+python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
+PYTHONPATH=. pytest -q
+```
+
+## Contributing
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Relevant docs:
+
+- [docs/user-guide.md](docs/user-guide.md)
+- [docs/developer-guide.md](docs/developer-guide.md)
+- [docs/phase-2-plan.md](docs/phase-2-plan.md)
+
+## Repository Layout
 
 ```
 feacopilot/
-├── app.py                  # Streamlit UI
-├── requirements.txt
-├── README.md
+├── app.py
 ├── fea_engine/
-│   ├── __init__.py
-│   ├── llm_client.py       # OpenAI Responses helper
-│   ├── models.py           # Dataclasses for specs/results
-│   ├── parser.py           # Prompt → structured spec
-│   ├── generator.py        # Spec → FEniCS script (Jinja templates)
-│   ├── solver.py           # Docker/local/mock execution wrapper
-│   ├── postprocessor.py    # Loads solver metrics
-│   ├── visualizer.py       # Plotly figures
-│   ├── summarizer.py       # LLM + fallback summary text
-│   ├── utils.py            # Analytical beam/plate estimates
-│   ├── validation.py       # Simulation validation rules
-│   └── errors.py           # Typed application errors
-├── docs/
-│   ├── user-guide.md
-│   └── developer-guide.md
+├── templates/
 ├── tests/
-│   ├── test_parser.py
-│   ├── test_validation.py
-│   ├── test_generator_golden.py
-│   └── golden/
-│       ├── beam_simulation.py
-│       └── plate_simulation.py
-└── templates/
-    ├── beam_template.py
-    └── plate_template.py
+├── docs/
+├── requirements.txt
+├── requirements-dev.txt
+├── CONTRIBUTING.md
+└── README.md
 ```
 
-## Usage Notes
+## Phase 2 Preparation
 
-1. Enter a natural-language description (e.g., *"1 m steel cantilever beam with 100 N downward tip load"*).
-2. Pick the solver mode & mesh density from the sidebar.
-3. Click **Run simulation**. The pipeline will:
-   - Parse the prompt (LLM + heuristics)
-   - Generate and optionally execute a FEniCS script
-   - Post-process & visualize key metrics
-   - Summarize the outcome in plain language
+Phase 2 is the backend hardening round. The current preparation artifacts are:
 
-If Docker/FEniCS is unavailable, the mock mode still provides ballpark deflection/stress numbers via classical formulas.
+- a contributor guide with repository standards
+- a documented Phase 2 ticket sequence
+- CI automation for parser and template regressions
 
-The parser is intentionally narrow in this phase. Unsupported or ambiguous prompts now fail explicitly instead of silently guessing.
-
-## Testing & Linting
-
-Install dev dependencies and run the test suite with:
-
-```bash
-pip install -r requirements-dev.txt
-pytest -q
-```
-
-Phase 1 adds:
-
-- Parser regression tests for dimensions, units, and supported prompt shapes
-- Validation tests for the supported simulation contract
-- Golden tests for generated beam and plate scripts
+See [docs/phase-2-plan.md](docs/phase-2-plan.md) for the concrete work queue.
 
 ## Disclaimer
 
