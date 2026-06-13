@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from typing import Any, Dict
-
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -10,7 +7,7 @@ from fea_engine import (
     FEACopilotError,
     SimulationService,
 )
-from fea_engine.models import SimulationSpec
+from fea_engine.presentation import spec_to_display_dict
 
 load_dotenv()
 
@@ -43,17 +40,6 @@ run_clicked = st.button("Run simulation", type="primary")
 status_placeholder = st.empty()
 
 simulation_service = SimulationService()
-
-
-def spec_to_dict(spec: SimulationSpec) -> Dict[str, Any]:
-    data = asdict(spec)
-    data["geometry"] = spec.geometry.value
-    for load in data["loads"]:
-        load["load_type"] = load["load_type"].value
-    if spec.material:
-        data["material"]["name"] = spec.material.name
-    return data
-
 
 if run_clicked:
     if not prompt.strip():
@@ -90,7 +76,7 @@ if run_clicked:
             )
 
             st.subheader("Parsed specification")
-            st.json(spec_to_dict(result.spec))
+            st.json(spec_to_display_dict(result.spec))
         except FEACopilotError as exc:
             status_placeholder.error(str(exc))
         except Exception as exc:  # pragma: no cover

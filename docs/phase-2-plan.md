@@ -4,14 +4,26 @@
 
 Phase 2 is the backend hardening round. The goal is to move the project from a correctness-focused prototype to a safer execution architecture with explicit backend contracts.
 
+## Closeout Summary
+
+Phase 2 is complete.
+
+Closeout list:
+
+1. Finish the UI boundary so `app.py` is a thin shell.
+2. Add richer container lifecycle metadata to the backend contract.
+3. Guarantee Docker cleanup and record cleanup status in artifacts.
+4. Validate the real container-backed path in CI against the artifact schema.
+
 ## Current Progress
 
 - `SimulationService` has been introduced in `fea_engine/service.py`.
 - `app.py` now delegates the simulation pipeline to the service layer.
+- UI-specific spec serialization has been extracted out of `app.py` into `fea_engine/presentation.py`.
 - Service-level tests cover orchestration and the real mock backend path.
 - Host-local solver execution has been removed from the supported backend path.
 - `SolverArtifacts` now carries a stricter run contract for post-processing and service orchestration.
-- Docker and mock runs now capture structured stdout/stderr metadata, and backend failures are normalized through the service layer.
+- Docker and mock runs now capture structured stdout/stderr metadata, runtime lifecycle state, and cleanup status; backend failures are normalized through the service layer.
 - Explicit `backend_status.json`, `backend_metadata.json`, and `run_result.json` artifacts are now written for successful runs, and failure paths write backend status/metadata artifacts before raising.
 
 ## Workstreams
@@ -29,7 +41,7 @@ Acceptance:
 
 Status:
 
-- In progress. The first extraction is complete; follow-up work should keep moving orchestration concerns out of the UI and into stable service interfaces.
+- Complete. `app.py` is now a thin UI wrapper, and reusable presentation logic has been moved into engine modules.
 
 ### 2. Remove unsafe local execution from the supported path
 
@@ -55,7 +67,7 @@ Acceptance:
 
 Status:
 
-- Expanded contract implemented. Future work should extend it with richer container/runtime metadata and cleanup policies.
+- Complete. The artifact contract now includes backend status files, backend metadata files, runtime metadata, cleanup status, and a normalized `run_result.json` schema.
 
 ### 4. Harden Docker solver execution
 
@@ -68,7 +80,7 @@ Acceptance:
 
 Status:
 
-- In progress. Structured stdout/stderr capture, backend artifact files, and service-level failure normalization are implemented; cleanup guarantees and deeper runtime inspection are the next hardening targets.
+- Complete. Docker execution now uses an explicit create/start/wait/logs/inspect/remove lifecycle, captures runtime state, and records cleanup outcomes in backend artifacts.
 
 ### 5. Add integration coverage for backend execution
 

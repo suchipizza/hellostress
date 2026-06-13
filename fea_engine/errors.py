@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+
 class FEACopilotError(Exception):
     """Base class for recoverable application errors."""
 
@@ -37,6 +38,8 @@ class SolverExecutionError(FEACopilotError):
         stdout_excerpt: str = "",
         stderr_excerpt: str = "",
         timed_out: bool = False,
+        container_id: Optional[str] = None,
+        cleanup_status: str = "",
     ) -> None:
         super().__init__(message)
         self.backend_mode = backend_mode
@@ -50,6 +53,8 @@ class SolverExecutionError(FEACopilotError):
         self.stdout_excerpt = stdout_excerpt
         self.stderr_excerpt = stderr_excerpt
         self.timed_out = timed_out
+        self.container_id = container_id
+        self.cleanup_status = cleanup_status
 
 
 class SimulationRunError(FEACopilotError):
@@ -90,6 +95,10 @@ class SimulationRunError(FEACopilotError):
         elif error.stdout_path is not None:
             details.append(f"log: {error.stdout_path}")
 
+        if error.container_id:
+            details.append(f"container: {error.container_id}")
+        if error.cleanup_status:
+            details.append(f"cleanup: {error.cleanup_status}")
         if error.status_path is not None:
             details.append(f"status: {error.status_path}")
         if error.metadata_path is not None:

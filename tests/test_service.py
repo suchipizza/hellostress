@@ -10,7 +10,7 @@ import pytest
 from fea_engine import BeamSection, LoadCase, SimulationRunError, SimulationService, SimulationSpec, SolverExecutionError
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
 from fea_engine.postprocessor import MetricsCollectionResult
-from fea_engine.solver import SolverArtifacts, SolverRunMetadata
+from fea_engine.solver import BackendRuntimeMetadata, SolverArtifacts, SolverRunMetadata
 
 
 class StubParser:
@@ -116,6 +116,7 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
             stdout_excerpt="",
             stderr_excerpt="",
         ),
+        runtime_metadata=BackendRuntimeMetadata(),
     )
     seen_specs: list[SimulationSpec] = []
     seen_scripts: list[str] = []
@@ -171,6 +172,9 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
     assert schema_payload["status"] == "completed"
     assert schema_payload["metrics_source"] == "solver_artifact"
+    assert schema_payload["backend_status_details"] == {}
+    assert schema_payload["backend_metadata"] == {}
+    assert schema_payload["runtime_metadata"]["cleanup_status"] == "not_applicable"
 
 
 def test_service_runs_real_mock_pipeline() -> None:
@@ -205,6 +209,9 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.metrics["max_stress"] > 0
     assert result.summary
     assert result.solver_mode == "mock"
+    assert result.result_schema_path.exists()
+    schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["runtime_metadata"]["cleanup_status"] == "not_applicable"
 
 
 def test_service_normalizes_solver_failures() -> None:
@@ -266,6 +273,11 @@ def test_service_marks_fallback_runs(tmp_path: Path) -> None:
             stdout_path=stdout_path,
             stderr_path=stderr_path,
         ),
+        runtime_metadata=BackendRuntimeMetadata(
+            container_id="abc123",
+            container_status="exited",
+            cleanup_status="removed",
+        ),
         warnings=["Solver backend did not produce metrics.json; post-processing may fall back to estimates."],
     )
     seen_specs: list[SimulationSpec] = []
@@ -296,3 +308,4 @@ def test_service_marks_fallback_runs(tmp_path: Path) -> None:
     assert schema_payload["status"] == "completed_with_fallback"
     assert schema_payload["fallback_used"] is True
     assert schema_payload["metrics_source"] == "analytical_fallback"
+    assert schema_payload["runtime_metadata"]["container_id"] == "abc123"

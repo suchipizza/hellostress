@@ -131,6 +131,8 @@ class SimulationService:
             "metrics_source": metrics_result.source,
             "fallback_used": metrics_result.fallback_used,
             "warnings": [*artifacts.warnings, *metrics_result.warnings],
+            "backend_status_details": self._load_json(artifacts.backend_status_path),
+            "backend_metadata": self._load_json(artifacts.backend_metadata_path),
             "artifacts": {
                 "run_dir": str(artifacts.run_dir),
                 "script_path": str(artifacts.script_path),
@@ -141,11 +143,17 @@ class SimulationService:
                 "generated_files": [str(path) for path in artifacts.generated_files],
             },
             "run_metadata": asdict(artifacts.run_metadata),
+            "runtime_metadata": asdict(artifacts.runtime_metadata),
         }
         payload["run_metadata"]["stdout_path"] = str(artifacts.run_metadata.stdout_path)
         payload["run_metadata"]["stderr_path"] = str(artifacts.run_metadata.stderr_path)
         result_schema_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return result_schema_path
+
+    def _load_json(self, path: Path) -> dict[str, object]:
+        if not path.exists():
+            return {}
+        return json.loads(path.read_text(encoding="utf-8"))
 
 
 __all__ = ["SimulationRunResult", "SimulationService"]

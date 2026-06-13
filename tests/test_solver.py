@@ -62,6 +62,8 @@ def test_solver_mock_contract_writes_metrics(tmp_path: Path) -> None:
     metadata_payload = json.loads(artifacts.backend_metadata_path.read_text(encoding="utf-8"))
     assert metadata_payload["backend_mode"] == "mock"
     assert metadata_payload["docker_image"] is None
+    assert artifacts.runtime_metadata.cleanup_status == "not_applicable"
+    assert metadata_payload["runtime"]["cleanup_status"] == "not_applicable"
 
 
 def test_solver_docker_mode_requires_docker(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,11 +88,33 @@ def test_solver_docker_success_captures_stdout_stderr_metadata(
                 stdout="Docker version 27.0.1",
                 stderr="",
             )
+        if command[:2] == ["docker", "create"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-123\n", stderr="")
+        if command[:2] == ["docker", "start"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-123\n", stderr="")
+        if command[:2] == ["docker", "wait"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="0\n", stderr="")
+        if command[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="solver ok\nline two",
+                stderr="warning line",
+            )
+        if command[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout='{"Status": "exited", "ExitCode": 0}',
+                stderr="",
+            )
+        if command[:2] == ["docker", "rm"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-123\n", stderr="")
         return subprocess.CompletedProcess(
             args=command,
             returncode=0,
-            stdout="solver ok\nline two",
-            stderr="warning line",
+            stdout="",
+            stderr="",
         )
 
     monkeypatch.setattr("subprocess.run", fake_run)
@@ -106,12 +130,17 @@ def test_solver_docker_success_captures_stdout_stderr_metadata(
     assert artifacts.run_metadata.exit_code == 0
     assert artifacts.run_metadata.stdout_excerpt == "solver ok line two"
     assert artifacts.run_metadata.stderr_excerpt == "warning line"
+    assert artifacts.runtime_metadata.container_id == "container-123"
+    assert artifacts.runtime_metadata.container_status == "exited"
+    assert artifacts.runtime_metadata.cleanup_status == "removed"
     assert artifacts.run_metadata.stdout_path.read_text(encoding="utf-8") == "solver ok\nline two"
     assert artifacts.run_metadata.stderr_path.read_text(encoding="utf-8") == "warning line"
     metadata_payload = json.loads(artifacts.backend_metadata_path.read_text(encoding="utf-8"))
     assert metadata_payload["docker_image"] == solver.docker_image
     assert metadata_payload["docker_version"] == "Docker version 27.0.1"
     assert metadata_payload["run_metadata"]["stdout_excerpt"] == "solver ok line two"
+    assert metadata_payload["runtime"]["container_id"] == "container-123"
+    assert metadata_payload["runtime"]["cleanup_status"] == "removed"
 
 
 def test_solver_docker_failure_exposes_structured_metadata(
@@ -129,12 +158,29 @@ def test_solver_docker_failure_exposes_structured_metadata(
                 stdout="Docker version 27.0.1",
                 stderr="",
             )
-        raise subprocess.CalledProcessError(
-            returncode=125,
-            cmd=command,
-            output="stdout details",
-            stderr="stderr details",
-        )
+        if command[:2] == ["docker", "create"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-456\n", stderr="")
+        if command[:2] == ["docker", "start"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-456\n", stderr="")
+        if command[:2] == ["docker", "wait"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="125\n", stderr="")
+        if command[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="stdout details",
+                stderr="stderr details",
+            )
+        if command[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout='{"Status": "exited", "ExitCode": 125, "Error": "solver failed"}',
+                stderr="",
+            )
+        if command[:2] == ["docker", "rm"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-456\n", stderr="")
+        raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr("subprocess.run", fake_run)
     solver = FenicsSolver(mode="docker", workspace=tmp_path)
@@ -148,6 +194,8 @@ def test_solver_docker_failure_exposes_structured_metadata(
     assert error.command[0] == "docker"
     assert error.stdout_excerpt == "stdout details"
     assert error.stderr_excerpt == "stderr details"
+    assert error.container_id == "container-456"
+    assert error.cleanup_status == "removed"
     assert error.stdout_path is not None and error.stdout_path.exists()
     assert error.stderr_path is not None and error.stderr_path.exists()
     assert error.run_dir is not None and error.run_dir.exists()
@@ -155,9 +203,12 @@ def test_solver_docker_failure_exposes_structured_metadata(
     assert error.metadata_path is not None and error.metadata_path.exists()
     status_payload = json.loads(error.status_path.read_text(encoding="utf-8"))
     assert status_payload["status"] == "failed"
+    assert status_payload["cleanup_status"] == "removed"
     metadata_payload = json.loads(error.metadata_path.read_text(encoding="utf-8"))
     assert metadata_payload["docker_image"] == solver.docker_image
     assert metadata_payload["run_metadata"]["stderr_excerpt"] == "stderr details"
+    assert metadata_payload["runtime"]["container_id"] == "container-456"
+    assert metadata_payload["runtime"]["state"]["ExitCode"] == 125
 
 
 def test_solver_docker_timeout_exposes_structured_metadata(
@@ -175,12 +226,36 @@ def test_solver_docker_timeout_exposes_structured_metadata(
                 stdout="Docker version 27.0.1",
                 stderr="",
             )
-        raise subprocess.TimeoutExpired(
-            cmd=command,
-            timeout=kwargs.get("timeout", 60),
-            output="stdout before timeout",
-            stderr="stderr before timeout",
-        )
+        if command[:2] == ["docker", "create"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-789\n", stderr="")
+        if command[:2] == ["docker", "start"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-789\n", stderr="")
+        if command[:2] == ["docker", "wait"]:
+            raise subprocess.TimeoutExpired(
+                cmd=command,
+                timeout=kwargs.get("timeout", 60),
+                output="stdout before timeout",
+                stderr="stderr before timeout",
+            )
+        if command[:2] == ["docker", "stop"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-789\n", stderr="")
+        if command[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="stdout before timeout",
+                stderr="stderr before timeout",
+            )
+        if command[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout='{"Status": "exited", "ExitCode": 137}',
+                stderr="",
+            )
+        if command[:2] == ["docker", "rm"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="container-789\n", stderr="")
+        raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr("subprocess.run", fake_run)
     solver = FenicsSolver(mode="docker", workspace=tmp_path, timeout_seconds=12)
@@ -191,6 +266,12 @@ def test_solver_docker_timeout_exposes_structured_metadata(
     error = exc_info.value
     assert error.timed_out is True
     assert error.exit_code == -1
+    assert error.container_id == "container-789"
+    assert error.cleanup_status == "removed"
     assert error.status_path is not None and error.status_path.exists()
     status_payload = json.loads(error.status_path.read_text(encoding="utf-8"))
     assert status_payload["status"] == "timed_out"
+    assert status_payload["cleanup_status"] == "removed"
+    metadata_payload = json.loads(error.metadata_path.read_text(encoding="utf-8"))
+    assert metadata_payload["runtime"]["container_id"] == "container-789"
+    assert metadata_payload["runtime"]["cleanup_status"] == "removed"

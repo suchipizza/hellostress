@@ -30,6 +30,7 @@ Phase 1 establishes a stricter contract around parsing and validation, and the c
 - Golden tests are used to catch unintended script-template regressions.
 - `SimulationService` is now the preferred entry point for app-level orchestration tests and future API/service extraction work.
 - `FenicsSolver` now exposes a stricter artifact contract and only supports `mock`, `docker`, and `auto`.
+- `app.py` should stay a UI shell. Presentation helpers belong in engine modules so they can be tested without Streamlit.
 
 ## Solver Artifact Contract
 
@@ -44,10 +45,18 @@ Phase 1 establishes a stricter contract around parsing and validation, and the c
 - `backend_status_path`: path to `backend_status.json`
 - `backend_metadata_path`: path to `backend_metadata.json`
 - `run_metadata`: command, exit code, timeout flag, stdout log path, stderr log path, and short excerpts
+- `runtime_metadata`: normalized container lifecycle metadata, inspect state, and cleanup result
 - `generated_files`: files produced by the backend
 - `warnings`: backend or contract warnings
 
 `SimulationService` is also responsible for normalizing backend failures into application-level `SimulationRunError` instances so UI layers do not need to reason about subprocess exceptions directly.
+
+For Docker runs, the backend now uses an explicit `create` / `start` / `wait` / `logs` / `inspect` / `rm` lifecycle so artifact files can capture:
+
+- container id
+- start and finish timestamps
+- container state from Docker inspect
+- cleanup status after removal
 
 ## Final Run Result Schema
 
@@ -60,8 +69,9 @@ It captures:
 - metrics source
 - fallback usage
 - aggregated warnings
+- embedded backend status and metadata payloads
 - file paths for the backend artifacts
-- serialized run metadata
+- serialized run metadata and runtime metadata
 
 ## Repository Standards
 
@@ -73,4 +83,4 @@ It captures:
 
 - Deployment guide for containerized execution
 - Operations/runbook documentation
-- API/service-layer documentation once the UI orchestration is extracted
+- API/service-layer documentation for non-Streamlit entry points

@@ -139,6 +139,9 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
         "timed_out": False,
         "metrics_path": str(result.artifacts.metrics_path),
         "metrics_present": True,
+        "container_id": result.artifacts.runtime_metadata.container_id,
+        "container_status": result.artifacts.runtime_metadata.container_status,
+        "cleanup_status": result.artifacts.runtime_metadata.cleanup_status,
     }
 
     metadata_payload = json.loads(result.artifacts.backend_metadata_path.read_text(encoding="utf-8"))
@@ -147,6 +150,8 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
     assert metadata_payload["docker_image"] == "dolfinx/dolfinx:v0.7.3"
     assert metadata_payload["docker_version"]
     assert metadata_payload["timeout_seconds"] == 60
+    assert metadata_payload["runtime"]["container_id"] == result.artifacts.runtime_metadata.container_id
+    assert metadata_payload["runtime"]["cleanup_status"] == "removed"
     assert metadata_payload["run_metadata"]["command"][0] == "docker"
     assert metadata_payload["run_metadata"]["exit_code"] == 0
     assert metadata_payload["run_metadata"]["stdout_path"] == str(result.artifacts.run_metadata.stdout_path)
@@ -159,6 +164,8 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
     assert schema_payload["metrics_source"] == "solver_artifact"
     assert schema_payload["fallback_used"] is False
     assert schema_payload["warnings"] == []
+    assert schema_payload["backend_status_details"]["cleanup_status"] == "removed"
+    assert schema_payload["backend_metadata"]["runtime"]["container_id"] == result.artifacts.runtime_metadata.container_id
     assert schema_payload["artifacts"] == {
         "run_dir": str(result.artifacts.run_dir),
         "script_path": str(result.artifacts.script_path),
@@ -173,3 +180,4 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
     assert schema_payload["run_metadata"]["timed_out"] is False
     assert schema_payload["run_metadata"]["stdout_path"] == str(result.artifacts.run_metadata.stdout_path)
     assert schema_payload["run_metadata"]["stderr_path"] == str(result.artifacts.run_metadata.stderr_path)
+    assert schema_payload["runtime_metadata"]["cleanup_status"] == "removed"

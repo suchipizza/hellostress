@@ -20,8 +20,9 @@ from .models import (
 )
 from .parser import PromptParser
 from .generator import FenicsScriptGenerator
-from .solver import FenicsSolver, SolverRunMetadata
+from .solver import BackendRuntimeMetadata, FenicsSolver, SolverRunMetadata
 from .postprocessor import MetricsCollectionResult, ResultPostProcessor
+from .presentation import spec_to_display_dict
 from .visualizer import SimulationVisualizer
 from .summarizer import ResultSummarizer
 from .service import SimulationRunResult, SimulationService
@@ -29,6 +30,7 @@ from .validation import SimulationSpecValidator
 
 __all__ = [
     "BeamSection",
+    "BackendRuntimeMetadata",
     "FEACopilotError",
     "GeometryType",
     "SimulationSpec",
@@ -50,6 +52,7 @@ __all__ = [
     "SimulationService",
     "SimulationVisualizer",
     "ResultSummarizer",
+    "spec_to_display_dict",
     "SimulationSpecValidator",
     "SpecValidationError",
     "UnsupportedSolverModeError",

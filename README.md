@@ -77,6 +77,7 @@ The current service and backend path produces a structured solver artifact contr
 - `backend_status_path`: JSON file describing backend execution status
 - `backend_metadata_path`: JSON file describing backend metadata such as Docker image/version
 - `run_metadata`: structured command, exit code, timeout, and stdout/stderr diagnostics
+- `runtime_metadata`: container lifecycle metadata including container id, timing, state, and cleanup status
 - `generated_files`: files actually produced by the backend
 - `warnings`: contract or backend warnings surfaced to the application layer
 
@@ -84,6 +85,7 @@ The service layer also writes `run_result.json`, which normalizes:
 
 - final application status
 - backend execution status
+- backend status and metadata payloads
 - metrics source
 - whether analytical fallback was used
 - warning aggregation across backend and post-processing
@@ -113,15 +115,18 @@ feacopilot/
 └── README.md
 ```
 
-## Phase 2 Preparation
+## Phase 2 Status
 
-Phase 2 is the backend hardening round. The current preparation artifacts are:
+Phase 2 is complete on `main`.
 
-- a contributor guide with repository standards
-- a documented Phase 2 ticket sequence
-- CI automation for parser and template regressions
+The closeout work delivered:
 
-See [docs/phase-2-plan.md](docs/phase-2-plan.md) for the concrete work queue.
+- a thin UI shell in `app.py`, with orchestration and presentation helpers extracted into the engine layer
+- explicit backend artifact files and a normalized `run_result.json` schema
+- Docker lifecycle hardening with container state inspection and cleanup status capture
+- gated CI smoke coverage for the real container-backed execution path
+
+See [docs/phase-2-plan.md](docs/phase-2-plan.md) for the closeout record.
 
 ## Disclaimer
 
