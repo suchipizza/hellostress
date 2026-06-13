@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 import plotly.graph_objects as go
 
+from .errors import SimulationRunError, SolverExecutionError
 from .generator import FenicsScriptGenerator
 from .models import SimulationSpec
 from .parser import PromptParser
@@ -64,7 +65,10 @@ class SimulationService:
 
         self._emit(progress_callback, f"Running solver in {solver_mode} mode…")
         solver = self.solver_factory(solver_mode)
-        artifacts = solver.run(spec, script)
+        try:
+            artifacts = solver.run(spec, script)
+        except SolverExecutionError as exc:
+            raise SimulationRunError.from_solver_error(exc) from exc
 
         self._emit(progress_callback, "Post-processing results…")
         metrics = self.postprocessor.collect_metrics(spec, artifacts)

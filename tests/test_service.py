@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import plotly.graph_objects as go
+import pytest
 
-from fea_engine import BeamSection, LoadCase, SimulationService, SimulationSpec
+from fea_engine import BeamSection, LoadCase, SimulationRunError, SimulationService, SimulationSpec, SolverExecutionError
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
-from fea_engine.solver import SolverArtifacts
+from fea_engine.solver import SolverArtifacts, SolverRunMetadata
 
 
 class StubParser:
@@ -97,10 +98,19 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     parser = StubParser(spec)
     generator = StubGenerator()
     artifacts = SolverArtifacts(
+        run_dir=tmp_path,
         backend_mode="mock",
         script_path=tmp_path / "simulation.py",
         results_dir=tmp_path / "results",
         metrics_path=tmp_path / "results" / "metrics.json",
+        run_metadata=SolverRunMetadata(
+            command=["mock"],
+            exit_code=0,
+            stdout_path=tmp_path / "solver.stdout.log",
+            stderr_path=tmp_path / "solver.stderr.log",
+            stdout_excerpt="",
+            stderr_excerpt="",
+        ),
     )
     seen_specs: list[SimulationSpec] = []
     seen_scripts: list[str] = []
@@ -162,7 +172,12 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.spec.length == 1.0
     assert result.spec.mesh_density == 32
     assert result.script.strip()
+    assert result.artifacts.run_dir.exists()
     assert result.artifacts.backend_mode == "mock"
+    assert result.artifacts.run_metadata.command == ["mock"]
+    assert result.artifacts.run_metadata.exit_code == 0
+    assert result.artifacts.run_metadata.stdout_path.exists()
+    assert result.artifacts.run_metadata.stderr_path.exists()
     assert result.artifacts.metrics_path.name == "metrics.json"
     assert result.artifacts.metrics_path.exists()
     assert result.artifacts.generated_files == [result.artifacts.metrics_path]
@@ -171,3 +186,29 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.metrics["max_stress"] > 0
     assert result.summary
     assert result.solver_mode == "mock"
+
+
+def test_service_normalizes_solver_failures() -> None:
+    class FailingSolver:
+        mode = "docker"
+
+        def run(self, spec: SimulationSpec, script: str) -> SolverArtifacts:
+            raise SolverExecutionError(
+                "Docker solver execution failed.",
+                backend_mode="docker",
+                exit_code=125,
+                command=["docker", "run"],
+                stderr_excerpt="container boot failed",
+            )
+
+    service = SimulationService(solver_factory=lambda mode: FailingSolver())
+
+    with pytest.raises(SimulationRunError) as exc_info:
+        service.run_simulation(
+            prompt="Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load.",
+            mesh_density=32,
+            solver_mode="docker",
+        )
+
+    assert "Solver backend 'docker' failed with exit code 125." in str(exc_info.value)
+    assert "stderr: container boot failed" in str(exc_info.value)

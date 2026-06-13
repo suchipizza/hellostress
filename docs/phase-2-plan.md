@@ -11,6 +11,7 @@ Phase 2 is the backend hardening round. The goal is to move the project from a c
 - Service-level tests cover orchestration and the real mock backend path.
 - Host-local solver execution has been removed from the supported backend path.
 - `SolverArtifacts` now carries a stricter run contract for post-processing and service orchestration.
+- Docker and mock runs now capture structured stdout/stderr metadata, and backend failures are normalized through the service layer.
 
 ## Workstreams
 
@@ -63,6 +64,10 @@ Status:
 Acceptance:
 
 - Docker failures produce predictable application errors and leave no ambiguous state.
+
+Status:
+
+- In progress. Structured stdout/stderr capture and service-level failure normalization are implemented; cleanup and richer backend metadata are the next hardening targets.
 
 ### 5. Add integration coverage for backend execution
 

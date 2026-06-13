@@ -35,11 +35,15 @@ Phase 1 establishes a stricter contract around parsing and validation, and the c
 `SolverArtifacts` is the backend boundary consumed by post-processing and service orchestration.
 
 - `backend_mode`: the resolved backend used for the run
+- `run_dir`: working directory for the run
 - `script_path`: generated script path
 - `results_dir`: backend output directory
 - `metrics_path`: canonical metrics file path
+- `run_metadata`: command, exit code, timeout flag, stdout log path, stderr log path, and short excerpts
 - `generated_files`: files produced by the backend
 - `warnings`: backend or contract warnings
+
+`SimulationService` is also responsible for normalizing backend failures into application-level `SimulationRunError` instances so UI layers do not need to reason about subprocess exceptions directly.
 
 ## Repository Standards
 
