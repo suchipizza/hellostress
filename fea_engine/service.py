@@ -78,7 +78,7 @@ class SimulationService:
             metrics=metrics,
             figure=figure,
             summary=summary,
-            solver_mode=solver.mode,
+            solver_mode=artifacts.backend_mode,
         )
 
     def _default_solver_factory(self, solver_mode: str) -> FenicsSolver:

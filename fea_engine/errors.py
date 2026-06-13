@@ -11,3 +11,11 @@ class PromptParseError(FEACopilotError):
 
 class SpecValidationError(FEACopilotError):
     """Raised when a parsed or supplied simulation spec is invalid."""
+
+
+class UnsupportedSolverModeError(FEACopilotError):
+    """Raised when the requested solver mode is not supported."""
+
+
+class SolverExecutionError(FEACopilotError):
+    """Raised when a supported solver backend fails to execute."""

@@ -4,22 +4,29 @@ import json
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from .errors import SolverExecutionError, UnsupportedSolverModeError
 from .models import SimulationSpec
 from .utils import AnalyticalEstimator
 
 
 @dataclass
 class SolverArtifacts:
+    backend_mode: str
     script_path: Path
     results_dir: Path
+    metrics_path: Path
+    generated_files: list[Path] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class FenicsSolver:
-    """Executes generated FEniCS scripts via Docker, local Python, or mock mode."""
+    """Executes generated FEniCS scripts via Docker or mock mode."""
+
+    supported_modes = {"auto", "docker", "mock"}
 
     def __init__(
         self,
@@ -35,7 +42,15 @@ class FenicsSolver:
         self.mode = self._resolve_mode(mode)
 
     def _resolve_mode(self, requested: str) -> str:
+        if requested not in self.supported_modes:
+            raise UnsupportedSolverModeError(
+                f"Unsupported solver mode '{requested}'. Supported modes: auto, docker, mock."
+            )
         if requested != "auto":
+            if requested == "docker" and not shutil.which("docker"):
+                raise SolverExecutionError(
+                    "Docker solver mode was requested, but Docker is not available on this machine."
+                )
             return requested
         if shutil.which("docker"):
             return "docker"
@@ -48,15 +63,26 @@ class FenicsSolver:
         script_path.write_text(script, encoding="utf-8")
         results_dir = run_path / "results"
         results_dir.mkdir(exist_ok=True)
+        metrics_path = results_dir / "metrics.json"
 
         if self.mode == "docker":
             self._run_in_docker(script_path)
-        elif self.mode == "local":
-            self._run_locally(script_path)
         else:
-            self._run_mock(spec, results_dir)
+            self._run_mock(spec, metrics_path)
 
-        return SolverArtifacts(script_path=script_path, results_dir=results_dir)
+        generated_files = [path for path in sorted(results_dir.iterdir()) if path.is_file()]
+        warnings: list[str] = []
+        if not metrics_path.exists():
+            warnings.append("Solver backend did not produce metrics.json; post-processing may fall back to estimates.")
+
+        return SolverArtifacts(
+            backend_mode=self.mode,
+            script_path=script_path,
+            results_dir=results_dir,
+            metrics_path=metrics_path,
+            generated_files=generated_files,
+            warnings=warnings,
+        )
 
     def _run_in_docker(self, script_path: Path) -> None:
         cmd = [
@@ -69,18 +95,27 @@ class FenicsSolver:
             "python3",
             "/workspace/simulation.py",
         ]
-        subprocess.run(cmd, check=True, timeout=self.timeout_seconds)
+        try:
+            subprocess.run(
+                cmd,
+                check=True,
+                timeout=self.timeout_seconds,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise SolverExecutionError(
+                f"Docker solver timed out after {self.timeout_seconds} seconds."
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or "").strip()
+            detail = f" Docker stderr: {stderr}" if stderr else ""
+            raise SolverExecutionError(f"Docker solver execution failed.{detail}") from exc
 
-    def _run_locally(self, script_path: Path) -> None:
-        subprocess.run([
-            "python3",
-            str(script_path),
-        ], check=True, timeout=self.timeout_seconds)
-
-    def _run_mock(self, spec: SimulationSpec, results_dir: Path) -> None:
+    def _run_mock(self, spec: SimulationSpec, metrics_path: Path) -> None:
         metrics = AnalyticalEstimator.estimate(spec)
-        results_dir.mkdir(exist_ok=True)
-        with open(results_dir / "metrics.json", "w", encoding="utf-8") as fh:
+        metrics_path.parent.mkdir(exist_ok=True)
+        with open(metrics_path, "w", encoding="utf-8") as fh:
             json.dump(metrics, fh)
 
 

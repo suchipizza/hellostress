@@ -24,6 +24,8 @@ FEA Copilot converts a narrow set of natural-language beam and plate prompts int
 - Plate simulations currently support pressure loads only.
 - Beam width defaults to beam height when width is omitted.
 - Mock mode provides analytical estimates, not a certified FEA sign-off.
+- Supported solver backends are `mock`, `docker`, and `auto`.
+- Host-local solver execution is intentionally not supported.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 
 ## Troubleshooting

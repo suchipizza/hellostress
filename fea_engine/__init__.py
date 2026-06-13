@@ -1,6 +1,12 @@
 """Core FEA Copilot engine modules."""
 
-from .errors import FEACopilotError, PromptParseError, SpecValidationError
+from .errors import (
+    FEACopilotError,
+    PromptParseError,
+    SolverExecutionError,
+    SpecValidationError,
+    UnsupportedSolverModeError,
+)
 from .models import (
     BeamSection,
     GeometryType,
@@ -32,6 +38,7 @@ __all__ = [
     "PlateDimensions",
     "PromptParseError",
     "PromptParser",
+    "SolverExecutionError",
     "FenicsScriptGenerator",
     "FenicsSolver",
     "ResultPostProcessor",
@@ -41,4 +48,5 @@ __all__ = [
     "ResultSummarizer",
     "SimulationSpecValidator",
     "SpecValidationError",
+    "UnsupportedSolverModeError",
 ]

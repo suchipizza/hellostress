@@ -17,6 +17,7 @@ This project is intentionally narrow right now.
 - Supported plate prompts must clearly include rectangular plan dimensions, thickness, and pressure with units.
 - Mock mode provides analytical estimates.
 - Docker mode is the intended path for generated FEniCS execution.
+- Host-local execution is not a supported backend.
 
 Unsupported or ambiguous prompts should fail clearly rather than return plausible nonsense.
 
@@ -55,6 +56,17 @@ Run the checks used in this repository:
 python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
 PYTHONPATH=. pytest -q
 ```
+
+## Solver Backend Contract
+
+The current service and backend path produces a structured solver artifact contract:
+
+- `backend_mode`: resolved backend used for execution
+- `script_path`: generated simulation script written for the run
+- `results_dir`: directory for solver outputs
+- `metrics_path`: expected `metrics.json` path
+- `generated_files`: files actually produced by the backend
+- `warnings`: contract or backend warnings surfaced to the application layer
 
 ## Contributing
 

@@ -9,6 +9,8 @@ Phase 2 is the backend hardening round. The goal is to move the project from a c
 - `SimulationService` has been introduced in `fea_engine/service.py`.
 - `app.py` now delegates the simulation pipeline to the service layer.
 - Service-level tests cover orchestration and the real mock backend path.
+- Host-local solver execution has been removed from the supported backend path.
+- `SolverArtifacts` now carries a stricter run contract for post-processing and service orchestration.
 
 ## Workstreams
 
@@ -36,6 +38,10 @@ Acceptance:
 
 - No production-facing path executes generated solver code directly on the host.
 
+Status:
+
+- Complete for the current supported path.
+
 ### 3. Define a solver artifact contract
 
 - Standardize the expected results layout from each backend.
@@ -44,6 +50,10 @@ Acceptance:
 Acceptance:
 
 - Post-processing consumes a defined contract rather than backend-specific assumptions.
+
+Status:
+
+- Initial contract implemented. Future work should extend it with richer metadata and hardened docker diagnostics.
 
 ### 4. Harden Docker solver execution
 

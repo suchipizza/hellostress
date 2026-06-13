@@ -28,6 +28,18 @@ Phase 1 establishes a stricter contract around parsing and validation, and the c
 - Validation is separate from parsing so future API entry points can reuse the same rules.
 - Golden tests are used to catch unintended script-template regressions.
 - `SimulationService` is now the preferred entry point for app-level orchestration tests and future API/service extraction work.
+- `FenicsSolver` now exposes a stricter artifact contract and only supports `mock`, `docker`, and `auto`.
+
+## Solver Artifact Contract
+
+`SolverArtifacts` is the backend boundary consumed by post-processing and service orchestration.
+
+- `backend_mode`: the resolved backend used for the run
+- `script_path`: generated script path
+- `results_dir`: backend output directory
+- `metrics_path`: canonical metrics file path
+- `generated_files`: files produced by the backend
+- `warnings`: backend or contract warnings
 
 ## Repository Standards
 

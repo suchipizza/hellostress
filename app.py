@@ -28,13 +28,14 @@ EXAMPLE_PROMPTS = {
 
 with st.sidebar:
     st.header("Settings")
-    solver_mode = st.selectbox("Solver mode", ["mock", "docker", "local", "auto"], index=0)
+    solver_mode = st.selectbox("Solver mode", ["mock", "docker", "auto"], index=0)
     mesh_density = st.slider("Mesh density", min_value=12, max_value=80, value=32, step=4)
     selected_example = st.selectbox("Example prompt", list(EXAMPLE_PROMPTS.keys()), index=0)
     if st.button("Use example"):
         st.session_state["prompt_text"] = EXAMPLE_PROMPTS[selected_example]
     st.markdown("---")
     st.caption("OpenAI API key is optional but enables better parsing + summaries.")
+    st.caption("Supported solver backends: mock, docker, or auto.")
 
 prompt_default = st.session_state.get("prompt_text", EXAMPLE_PROMPTS["Cantilever beam"])
 prompt = st.text_area("Simulation prompt", value=prompt_default, height=140)

@@ -97,8 +97,10 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     parser = StubParser(spec)
     generator = StubGenerator()
     artifacts = SolverArtifacts(
+        backend_mode="mock",
         script_path=tmp_path / "simulation.py",
         results_dir=tmp_path / "results",
+        metrics_path=tmp_path / "results" / "metrics.json",
     )
     seen_specs: list[SimulationSpec] = []
     seen_scripts: list[str] = []
@@ -160,6 +162,11 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.spec.length == 1.0
     assert result.spec.mesh_density == 32
     assert result.script.strip()
+    assert result.artifacts.backend_mode == "mock"
+    assert result.artifacts.metrics_path.name == "metrics.json"
+    assert result.artifacts.metrics_path.exists()
+    assert result.artifacts.generated_files == [result.artifacts.metrics_path]
+    assert result.artifacts.warnings == []
     assert result.metrics["max_deflection"] > 0
     assert result.metrics["max_stress"] > 0
     assert result.summary
