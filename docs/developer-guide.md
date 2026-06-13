@@ -23,6 +23,7 @@ The Phase 1 and Phase 2 work established a stricter parsing and backend contract
 - Golden template tests live in `tests/test_generator_golden.py`.
 - Run all tests with `pytest -q`.
 - The CLI coverage lives in `tests/test_cli.py`.
+- GitHub Actions also runs a CLI artifact workflow smoke path covering run creation, inspection, export, and cleanup.
 - The gated Docker integration smoke test lives in `tests/test_integration_docker_smoke.py` and should be run with `RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke`.
 
 ## Runtime Configuration
@@ -137,9 +138,10 @@ Phase 4 defines a machine-readable compatibility boundary for persisted run arti
 - Use `pytest -q` for local test runs after the editable install.
 - Keep local tooling artifacts out of Git via `.gitignore`.
 - Treat `app.py` as the UI shell, not the orchestration layer.
+- Use [artifact-lifecycle-runbook.md](artifact-lifecycle-runbook.md) as the operational reference for inspection, export, and retention workflows.
 
 ## Next Documentation Targets
 
 - Deployment guide for containerized execution
-- Operations/runbook documentation for artifact inspection and failure handling
+- Failure-handling and incident-response notes for backend troubleshooting
 - API/service-layer documentation for non-Streamlit entry points

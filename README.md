@@ -100,6 +100,8 @@ docker pull dolfinx/dolfinx:v0.7.3
 RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
 ```
 
+The main GitHub Actions test job also exercises the CLI artifact lifecycle in `mock` mode: run creation, inspection, export manifest validation, and cleanup retention behavior.
+
 ## Solver Backend Contract
 
 The current service and backend path produces a structured solver artifact contract:
@@ -145,6 +147,7 @@ Relevant docs:
 
 - [docs/user-guide.md](docs/user-guide.md)
 - [docs/developer-guide.md](docs/developer-guide.md)
+- [docs/artifact-lifecycle-runbook.md](docs/artifact-lifecycle-runbook.md)
 - [docs/phase-2-plan.md](docs/phase-2-plan.md)
 - [docs/phase-3-plan.md](docs/phase-3-plan.md)
 - [docs/phase-4-plan.md](docs/phase-4-plan.md)

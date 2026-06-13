@@ -33,6 +33,8 @@ feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
 feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
 ```
 
+For operational details around inspection, export manifests, retention, and automation-oriented JSON output, see [artifact-lifecycle-runbook.md](artifact-lifecycle-runbook.md).
+
 ## Supported Prompt Patterns
 
 - Beam: `1 m long steel cantilever beam 0.1 m thick with a 150 N downward tip load`
