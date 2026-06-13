@@ -57,6 +57,13 @@ python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
 PYTHONPATH=. pytest -q
 ```
 
+The Docker-backed smoke test is gated and only runs when explicitly enabled:
+
+```bash
+docker pull dolfinx/dolfinx:v0.7.3
+RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
+```
+
 ## Solver Backend Contract
 
 The current service and backend path produces a structured solver artifact contract:

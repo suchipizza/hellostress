@@ -79,6 +79,10 @@ Acceptance:
 
 - Phase 2 behavior is covered beyond parser-only tests.
 
+Status:
+
+- Implemented. CI now runs a gated Docker smoke test that validates `backend_status.json`, `backend_metadata.json`, and `run_result.json` against a real container-backed execution path.
+
 ## Suggested Ticket Sequence
 
 1. Create `fea_engine/service.py` or equivalent pipeline module.

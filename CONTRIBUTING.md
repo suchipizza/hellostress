@@ -27,6 +27,13 @@ python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
 PYTHONPATH=. pytest -q
 ```
 
+Run the Docker-backed smoke path when you touch backend orchestration, artifact schemas, or CI:
+
+```bash
+docker pull dolfinx/dolfinx:v0.7.3
+RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
+```
+
 ## Contribution Rules
 
 - Keep scope tight. Do not mix unrelated refactors into one change.

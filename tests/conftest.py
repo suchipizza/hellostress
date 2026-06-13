@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -9,6 +10,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fea_engine import BeamSection, LoadCase, PlateDimensions, PromptParser, SimulationSpec
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--run-docker-smoke",
+        action="store_true",
+        default=False,
+        help="run docker-backed integration smoke tests",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "integration: exercises the real Docker-backed execution path",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if config.getoption("--run-docker-smoke") or os.environ.get("RUN_DOCKER_SMOKE") == "1":
+        return
+
+    skip_integration = pytest.mark.skip(
+        reason="docker smoke tests disabled; use --run-docker-smoke or RUN_DOCKER_SMOKE=1"
+    )
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
 
 
 @pytest.fixture

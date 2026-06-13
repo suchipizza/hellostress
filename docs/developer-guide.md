@@ -21,6 +21,7 @@ Phase 1 establishes a stricter contract around parsing and validation, and the c
 - Unit tests live in `tests/test_parser.py` and `tests/test_validation.py`.
 - Golden template tests live in `tests/test_generator_golden.py`.
 - Run all tests with `pytest -q`.
+- The gated Docker integration smoke test lives in `tests/test_integration_docker_smoke.py` and should be run with `RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke`.
 
 ## Design Notes
 
