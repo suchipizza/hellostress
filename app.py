@@ -8,12 +8,7 @@ from dotenv import load_dotenv
 
 from fea_engine import (
     FEACopilotError,
-    FenicsScriptGenerator,
-    FenicsSolver,
-    PromptParser,
-    ResultPostProcessor,
-    ResultSummarizer,
-    SimulationVisualizer,
+    SimulationService,
 )
 from fea_engine.models import SimulationSpec
 
@@ -46,11 +41,7 @@ prompt = st.text_area("Simulation prompt", value=prompt_default, height=140)
 run_clicked = st.button("Run simulation", type="primary")
 status_placeholder = st.empty()
 
-parser = PromptParser()
-generator = FenicsScriptGenerator()
-postprocessor = ResultPostProcessor()
-visualizer = SimulationVisualizer()
-summarizer = ResultSummarizer()
+simulation_service = SimulationService()
 
 
 def spec_to_dict(spec: SimulationSpec) -> Dict[str, Any]:
@@ -68,46 +59,37 @@ if run_clicked:
         st.error("Please provide a simulation prompt.")
     else:
         try:
-            status_placeholder.info("Parsing prompt with heuristic + LLM assist…")
-            spec = parser.parse(prompt)
-            spec.mesh_density = mesh_density
-
-            status_placeholder.info("Generating FEniCS script…")
-            script = generator.render(spec)
-
-            status_placeholder.info(f"Running solver in {solver_mode} mode…")
-            solver = FenicsSolver(mode=solver_mode)
-            artifacts = solver.run(spec, script)
-
-            status_placeholder.info("Post-processing results…")
-            metrics = postprocessor.collect_metrics(spec, artifacts)
-            figure = visualizer.build_figure(spec, metrics)
-            summary = summarizer.summarize(spec, metrics)
+            result = simulation_service.run_simulation(
+                prompt=prompt,
+                mesh_density=mesh_density,
+                solver_mode=solver_mode,
+                progress_callback=status_placeholder.info,
+            )
 
             status_placeholder.success("Simulation completed ✅")
 
             st.subheader("Results summary")
-            st.write(summary)
+            st.write(result.summary)
 
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Max deflection (mm)", f"{metrics.get('max_deflection', 0.0) * 1e3:.3f}")
+                st.metric("Max deflection (mm)", f"{result.metrics.get('max_deflection', 0.0) * 1e3:.3f}")
             with col2:
-                st.metric("Max stress (MPa)", f"{metrics.get('max_stress', 0.0) / 1e6:.2f}")
+                st.metric("Max stress (MPa)", f"{result.metrics.get('max_stress', 0.0) / 1e6:.2f}")
 
-            st.plotly_chart(figure, use_container_width=True)
+            st.plotly_chart(result.figure, use_container_width=True)
 
             st.subheader("Generated FEniCS script")
-            st.code(script, language="python")
+            st.code(result.script, language="python")
             st.download_button(
                 label="Download script",
                 file_name="simulation.py",
                 mime="text/x-python",
-                data=script,
+                data=result.script,
             )
 
             st.subheader("Parsed specification")
-            st.json(spec_to_dict(spec))
+            st.json(spec_to_dict(result.spec))
         except FEACopilotError as exc:
             status_placeholder.error(str(exc))
         except Exception as exc:  # pragma: no cover

@@ -4,6 +4,12 @@
 
 Phase 2 is the backend hardening round. The goal is to move the project from a correctness-focused prototype to a safer execution architecture with explicit backend contracts.
 
+## Current Progress
+
+- `SimulationService` has been introduced in `fea_engine/service.py`.
+- `app.py` now delegates the simulation pipeline to the service layer.
+- Service-level tests cover orchestration and the real mock backend path.
+
 ## Workstreams
 
 ### 1. Extract orchestration from the UI
@@ -16,6 +22,10 @@ Acceptance:
 
 - `app.py` becomes a thin UI wrapper.
 - The core pipeline is callable from tests without Streamlit.
+
+Status:
+
+- In progress. The first extraction is complete; follow-up work should keep moving orchestration concerns out of the UI and into stable service interfaces.
 
 ### 2. Remove unsafe local execution from the supported path
 

@@ -17,6 +17,7 @@ from .solver import FenicsSolver
 from .postprocessor import ResultPostProcessor
 from .visualizer import SimulationVisualizer
 from .summarizer import ResultSummarizer
+from .service import SimulationRunResult, SimulationService
 from .validation import SimulationSpecValidator
 
 __all__ = [
@@ -34,6 +35,8 @@ __all__ = [
     "FenicsScriptGenerator",
     "FenicsSolver",
     "ResultPostProcessor",
+    "SimulationRunResult",
+    "SimulationService",
     "SimulationVisualizer",
     "ResultSummarizer",
     "SimulationSpecValidator",
