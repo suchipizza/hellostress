@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from .artifacts import ARTIFACT_SCHEMA_VERSION
 from .errors import SolverExecutionError, UnsupportedSolverModeError
 from .models import SimulationSpec
 from .utils import AnalyticalEstimator
@@ -439,6 +440,7 @@ class FenicsSolver:
         runtime_metadata: BackendRuntimeMetadata,
     ) -> None:
         status_payload = {
+            "schema_version": ARTIFACT_SCHEMA_VERSION,
             "backend_mode": backend_mode,
             "status": backend_status,
             "exit_code": run_metadata.exit_code,
@@ -450,6 +452,7 @@ class FenicsSolver:
             "cleanup_status": runtime_metadata.cleanup_status,
         }
         metadata_payload = {
+            "schema_version": ARTIFACT_SCHEMA_VERSION,
             "backend_mode": backend_mode,
             "run_dir": str(run_dir),
             "docker_image": self.docker_image if backend_mode == "docker" else None,

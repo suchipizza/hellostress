@@ -51,6 +51,13 @@ feacopilot \
 
 Use this path for automation, reproducible debugging, and future non-Streamlit integrations.
 
+For persisted runs, the CLI can inspect the artifact bundle without re-running the solver:
+
+```bash
+feacopilot --inspect-run-dir /path/to/run
+feacopilot --inspect-run-result /path/to/run/run_result.json --output json
+```
+
 ## Design Notes
 
 - The parser is intentionally narrow. Unsupported or ambiguous prompts should fail clearly.
@@ -93,6 +100,7 @@ For Docker runs, the backend now uses an explicit `create` / `start` / `wait` / 
 
 It captures:
 
+- `schema_version` for the artifact contract
 - normalized run status such as `completed` or `completed_with_fallback`
 - backend mode and backend status
 - metrics source
@@ -101,6 +109,8 @@ It captures:
 - embedded backend status and metadata payloads
 - file paths for the backend artifacts
 - serialized run metadata and runtime metadata
+
+`backend_status.json` and `backend_metadata.json` now also carry `schema_version`, and `fea_engine.artifacts` provides reusable validation helpers for artifact consumers.
 
 ## Repository Standards
 

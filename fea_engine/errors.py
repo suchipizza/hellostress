@@ -24,6 +24,10 @@ class ConfigurationError(FEACopilotError):
     """Raised when runtime configuration is invalid."""
 
 
+class ArtifactValidationError(FEACopilotError):
+    """Raised when a persisted run artifact bundle is invalid."""
+
+
 class SolverExecutionError(FEACopilotError):
     """Raised when a supported solver backend fails to execute."""
 

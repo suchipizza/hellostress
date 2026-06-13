@@ -2,7 +2,7 @@
 
 FEA Copilot is a narrow-scope structural simulation prototype that turns supported natural-language beam and plate prompts into structured specs, generated FEniCS scripts, quick estimates, and result summaries.
 
-Phase 2 closed out the backend hardening round. Phase 3 has started with shared runtime settings, a package-backed CLI, and CI/install paths that are closer to real open-source usage.
+Phase 2 closed out the backend hardening round. Phase 3 is complete, and Phase 4 has started on artifact-contract versioning and inspection for automation and operations.
 
 ## Current Scope
 
@@ -70,6 +70,13 @@ feacopilot --prompt-file prompt.txt --output json
 
 CLI JSON output includes status, metrics, warnings, parsed spec details, and the paths to `run_result.json`, `backend_status.json`, `backend_metadata.json`, and `metrics.json`.
 
+You can also inspect a completed run without re-executing it:
+
+```bash
+feacopilot --inspect-run-dir /path/to/run
+feacopilot --inspect-run-result /path/to/run/run_result.json --output json
+```
+
 ## Local Development
 
 Run the checks used in this repository:
@@ -112,6 +119,8 @@ The service layer also writes `run_result.json`, which normalizes:
 - whether analytical fallback was used
 - warning aggregation across backend and post-processing
 
+As of Phase 4, `backend_status.json`, `backend_metadata.json`, and `run_result.json` also carry an explicit `schema_version` field so automation can validate the contract before consuming a run.
+
 ## Contributing
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -122,6 +131,7 @@ Relevant docs:
 - [docs/developer-guide.md](docs/developer-guide.md)
 - [docs/phase-2-plan.md](docs/phase-2-plan.md)
 - [docs/phase-3-plan.md](docs/phase-3-plan.md)
+- [docs/phase-4-plan.md](docs/phase-4-plan.md)
 
 ## Repository Layout
 
@@ -141,7 +151,8 @@ feacopilot/
 ## Phase Status
 
 - Phase 2 is complete on `main`.
-- Phase 3 is in progress with packaging, shared runtime settings, and CLI groundwork now on the branch.
+- Phase 3 is complete on `main`.
+- Phase 4 is in progress with artifact-contract versioning and inspection work.
 
 ## Disclaimer
 

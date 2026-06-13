@@ -4,7 +4,7 @@ import io
 import json
 from pathlib import Path
 
-from fea_engine import RuntimeSettings, SimulationRunError, SimulationService
+from fea_engine import ARTIFACT_SCHEMA_VERSION, RuntimeSettings, SimulationRunError, SimulationService
 from fea_engine.cli import main
 
 
@@ -44,9 +44,12 @@ def test_cli_json_output_runs_real_mock_pipeline(tmp_path: Path) -> None:
     assert payload["fallback_used"] is False
     assert payload["metrics"]["max_deflection"] > 0
     assert payload["metrics"]["max_stress"] > 0
-    assert Path(payload["artifacts"]["result_schema_path"]).exists()
+    result_schema_path = Path(payload["artifacts"]["result_schema_path"])
+    assert result_schema_path.exists()
     assert Path(payload["artifacts"]["metrics_path"]).exists()
     assert payload["spec"]["geometry"] == "beam"
+    run_result_payload = json.loads(result_schema_path.read_text(encoding="utf-8"))
+    assert run_result_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
 
 
 def test_cli_text_output_uses_runtime_defaults(tmp_path: Path) -> None:
@@ -88,3 +91,60 @@ def test_cli_returns_non_zero_for_recoverable_service_failures(tmp_path: Path) -
     assert exit_code == 1
     assert stdout.getvalue() == ""
     assert "backend exploded" in stderr.getvalue()
+
+
+def test_cli_can_inspect_run_result_json(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    initial_stdout = io.StringIO()
+
+    exit_code = main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=initial_stdout,
+        stderr=io.StringIO(),
+    )
+    assert exit_code == 0
+    run_payload = json.loads(initial_stdout.getvalue())
+    run_result_path = run_payload["artifacts"]["result_schema_path"]
+
+    inspect_stdout = io.StringIO()
+    inspect_stderr = io.StringIO()
+    inspect_exit_code = main(
+        ["--inspect-run-result", run_result_path, "--output", "json"],
+        stdout=inspect_stdout,
+        stderr=inspect_stderr,
+    )
+
+    inspection_payload = json.loads(inspect_stdout.getvalue())
+    assert inspect_exit_code == 0
+    assert inspect_stderr.getvalue() == ""
+    assert inspection_payload["valid"] is True
+    assert inspection_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
+    assert inspection_payload["status"] == "completed"
+    assert inspection_payload["backend_status"] == "succeeded"
+
+
+def test_cli_can_inspect_run_directory(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    initial_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=initial_stdout,
+        stderr=io.StringIO(),
+    )
+    run_payload = json.loads(initial_stdout.getvalue())
+    run_dir = run_payload["artifacts"]["run_dir"]
+
+    inspect_stdout = io.StringIO()
+    inspect_exit_code = main(
+        ["--inspect-run-dir", run_dir],
+        stdout=inspect_stdout,
+        stderr=io.StringIO(),
+    )
+
+    assert inspect_exit_code == 0
+    output = inspect_stdout.getvalue()
+    assert "Inspection: valid" in output
+    assert "Schema version: 1" in output
+    assert "Run status: completed" in output

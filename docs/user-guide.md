@@ -20,6 +20,12 @@ You can also run a supported prompt without the UI:
 feacopilot --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load."
 ```
 
+To inspect a finished run:
+
+```bash
+feacopilot --inspect-run-dir /path/to/run
+```
+
 ## Supported Prompt Patterns
 
 - Beam: `1 m long steel cantilever beam 0.1 m thick with a 150 N downward tip load`
@@ -35,6 +41,7 @@ feacopilot --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with
 - Backend failures are normalized into user-facing solver errors with log context.
 - Successful runs now include backend status and metadata artifacts in the run directory for debugging.
 - The CLI writes the same backend artifacts as the app, including `run_result.json`.
+- Run artifacts now include a `schema_version` field for contract validation.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 
 ## Runtime Defaults

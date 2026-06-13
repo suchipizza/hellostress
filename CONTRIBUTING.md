@@ -9,7 +9,8 @@ This repository is being prepared as an open-source engineering prototype. Contr
 - Read [README.md](README.md) for current product scope.
 - Read [docs/developer-guide.md](docs/developer-guide.md) for the current architecture.
 - Read [docs/phase-2-plan.md](docs/phase-2-plan.md) for the backend hardening closeout.
-- Read [docs/phase-3-plan.md](docs/phase-3-plan.md) for the current OSS-readiness workstream.
+- Read [docs/phase-3-plan.md](docs/phase-3-plan.md) for the OSS-readiness closeout.
+- Read [docs/phase-4-plan.md](docs/phase-4-plan.md) for the current artifact-contract workstream.
 
 ## Local Setup
 

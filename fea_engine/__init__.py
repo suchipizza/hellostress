@@ -1,6 +1,13 @@
 """Core FEA Copilot engine modules."""
 
+from .artifacts import (
+    ARTIFACT_SCHEMA_VERSION,
+    ArtifactBundle,
+    build_bundle_summary,
+    load_artifact_bundle,
+)
 from .errors import (
+    ArtifactValidationError,
     ConfigurationError,
     FEACopilotError,
     PromptParseError,
@@ -32,7 +39,11 @@ from .validation import SimulationSpecValidator
 
 __all__ = [
     "BeamSection",
+    "ARTIFACT_SCHEMA_VERSION",
+    "ArtifactBundle",
+    "ArtifactValidationError",
     "BackendRuntimeMetadata",
+    "build_bundle_summary",
     "ConfigurationError",
     "FEACopilotError",
     "GeometryType",
@@ -55,6 +66,7 @@ __all__ = [
     "SimulationService",
     "SimulationVisualizer",
     "RuntimeSettings",
+    "load_artifact_bundle",
     "ResultSummarizer",
     "spec_to_display_dict",
     "SimulationSpecValidator",

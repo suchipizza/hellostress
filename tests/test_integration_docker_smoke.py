@@ -8,7 +8,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 import pytest
 
-from fea_engine import BeamSection, LoadCase, SimulationService, SimulationSpec
+from fea_engine import ARTIFACT_SCHEMA_VERSION, BeamSection, LoadCase, SimulationService, SimulationSpec
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
 from fea_engine.solver import FenicsSolver
 
@@ -133,6 +133,7 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
 
     status_payload = json.loads(result.artifacts.backend_status_path.read_text(encoding="utf-8"))
     assert status_payload == {
+        "schema_version": ARTIFACT_SCHEMA_VERSION,
         "backend_mode": "docker",
         "status": "succeeded",
         "exit_code": 0,
@@ -145,6 +146,7 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
     }
 
     metadata_payload = json.loads(result.artifacts.backend_metadata_path.read_text(encoding="utf-8"))
+    assert metadata_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert metadata_payload["backend_mode"] == "docker"
     assert metadata_payload["run_dir"] == str(result.artifacts.run_dir)
     assert metadata_payload["docker_image"] == "dolfinx/dolfinx:v0.7.3"
@@ -158,6 +160,7 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
     assert metadata_payload["run_metadata"]["stderr_path"] == str(result.artifacts.run_metadata.stderr_path)
 
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert schema_payload["status"] == "completed"
     assert schema_payload["backend_mode"] == "docker"
     assert schema_payload["backend_status"] == "succeeded"

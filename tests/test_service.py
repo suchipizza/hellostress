@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import pytest
 
 from fea_engine import (
+    ARTIFACT_SCHEMA_VERSION,
     BeamSection,
     LoadCase,
     RuntimeSettings,
@@ -178,6 +179,7 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     assert result.summary == "summary"
     assert result.solver_mode == "mock"
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert schema_payload["status"] == "completed"
     assert schema_payload["metrics_source"] == "solver_artifact"
     assert schema_payload["backend_status_details"] == {}
@@ -219,6 +221,7 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.solver_mode == "mock"
     assert result.result_schema_path.exists()
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert schema_payload["runtime_metadata"]["cleanup_status"] == "not_applicable"
 
 
@@ -338,6 +341,7 @@ def test_service_marks_fallback_runs(tmp_path: Path) -> None:
     assert result.fallback_used is True
     assert any("analytical fallback estimate used" in warning for warning in result.warnings)
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
+    assert schema_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert schema_payload["status"] == "completed_with_fallback"
     assert schema_payload["fallback_used"] is True
     assert schema_payload["metrics_source"] == "analytical_fallback"

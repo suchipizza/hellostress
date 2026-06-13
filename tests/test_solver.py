@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from fea_engine import BeamSection, LoadCase, SolverExecutionError, UnsupportedSolverModeError
+from fea_engine import ARTIFACT_SCHEMA_VERSION, BeamSection, LoadCase, SolverExecutionError, UnsupportedSolverModeError
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType, SimulationSpec
 from fea_engine.solver import FenicsSolver
 
@@ -57,9 +57,11 @@ def test_solver_mock_contract_writes_metrics(tmp_path: Path) -> None:
     assert artifacts.generated_files == [artifacts.metrics_path]
     assert artifacts.warnings == []
     status_payload = json.loads(artifacts.backend_status_path.read_text(encoding="utf-8"))
+    assert status_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert status_payload["status"] == "succeeded"
     assert status_payload["metrics_present"] is True
     metadata_payload = json.loads(artifacts.backend_metadata_path.read_text(encoding="utf-8"))
+    assert metadata_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert metadata_payload["backend_mode"] == "mock"
     assert metadata_payload["docker_image"] is None
     assert artifacts.runtime_metadata.cleanup_status == "not_applicable"
@@ -136,6 +138,7 @@ def test_solver_docker_success_captures_stdout_stderr_metadata(
     assert artifacts.run_metadata.stdout_path.read_text(encoding="utf-8") == "solver ok\nline two"
     assert artifacts.run_metadata.stderr_path.read_text(encoding="utf-8") == "warning line"
     metadata_payload = json.loads(artifacts.backend_metadata_path.read_text(encoding="utf-8"))
+    assert metadata_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert metadata_payload["docker_image"] == solver.docker_image
     assert metadata_payload["docker_version"] == "Docker version 27.0.1"
     assert metadata_payload["run_metadata"]["stdout_excerpt"] == "solver ok line two"
@@ -202,9 +205,11 @@ def test_solver_docker_failure_exposes_structured_metadata(
     assert error.status_path is not None and error.status_path.exists()
     assert error.metadata_path is not None and error.metadata_path.exists()
     status_payload = json.loads(error.status_path.read_text(encoding="utf-8"))
+    assert status_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert status_payload["status"] == "failed"
     assert status_payload["cleanup_status"] == "removed"
     metadata_payload = json.loads(error.metadata_path.read_text(encoding="utf-8"))
+    assert metadata_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert metadata_payload["docker_image"] == solver.docker_image
     assert metadata_payload["run_metadata"]["stderr_excerpt"] == "stderr details"
     assert metadata_payload["runtime"]["container_id"] == "container-456"
@@ -270,8 +275,10 @@ def test_solver_docker_timeout_exposes_structured_metadata(
     assert error.cleanup_status == "removed"
     assert error.status_path is not None and error.status_path.exists()
     status_payload = json.loads(error.status_path.read_text(encoding="utf-8"))
+    assert status_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert status_payload["status"] == "timed_out"
     assert status_payload["cleanup_status"] == "removed"
     metadata_payload = json.loads(error.metadata_path.read_text(encoding="utf-8"))
+    assert metadata_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
     assert metadata_payload["runtime"]["container_id"] == "container-789"
     assert metadata_payload["runtime"]["cleanup_status"] == "removed"

@@ -7,6 +7,7 @@ from typing import Callable, Optional
 
 import plotly.graph_objects as go
 
+from .artifacts import ARTIFACT_SCHEMA_VERSION
 from .errors import SimulationRunError, SolverExecutionError
 from .generator import FenicsScriptGenerator
 from .llm_client import OpenAILLMClient
@@ -132,6 +133,7 @@ class SimulationService:
     ) -> Path:
         result_schema_path = artifacts.run_dir / "run_result.json"
         payload = {
+            "schema_version": ARTIFACT_SCHEMA_VERSION,
             "status": status,
             "backend_mode": artifacts.backend_mode,
             "backend_status": artifacts.backend_status,

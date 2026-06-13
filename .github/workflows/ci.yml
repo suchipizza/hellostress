@@ -36,6 +36,9 @@ jobs:
             --solver-mode mock \
             --output json > cli-result.json
           python -c "import json; payload = json.load(open('cli-result.json', 'r', encoding='utf-8')); assert payload['status'] == 'completed'; assert payload['solver_mode'] == 'mock'"
+          RESULT_PATH=$(python -c "import json; payload = json.load(open('cli-result.json', 'r', encoding='utf-8')); print(payload['artifacts']['result_schema_path'])")
+          feacopilot --inspect-run-result \"$RESULT_PATH\" --output json > cli-inspect.json
+          python -c "import json; payload = json.load(open('cli-inspect.json', 'r', encoding='utf-8')); assert payload['valid'] is True; assert payload['status'] == 'completed'"
 
   docker-smoke:
     needs: test
