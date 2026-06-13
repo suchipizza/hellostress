@@ -29,16 +29,30 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Run CLI mock smoke test
+      - name: Run CLI artifact workflow smoke test
         run: |
+          export FEA_RUNS_DIR="$RUNNER_TEMP/fea-runs"
           feacopilot \
             --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load." \
             --solver-mode mock \
             --output json > cli-result.json
           python -c "import json; payload = json.load(open('cli-result.json', 'r', encoding='utf-8')); assert payload['status'] == 'completed'; assert payload['solver_mode'] == 'mock'"
           RESULT_PATH=$(python -c "import json; payload = json.load(open('cli-result.json', 'r', encoding='utf-8')); print(payload['artifacts']['result_schema_path'])")
+          export RUN_DIR=$(python -c "import json; payload = json.load(open('cli-result.json', 'r', encoding='utf-8')); print(payload['artifacts']['run_dir'])")
           feacopilot --inspect-run-result "$RESULT_PATH" --output json > cli-inspect.json
           python -c "import json; payload = json.load(open('cli-inspect.json', 'r', encoding='utf-8')); assert payload['valid'] is True; assert payload['status'] == 'completed'"
+          feacopilot --export-run-result "$RESULT_PATH" --export-output cli-export.zip --output json > cli-export.json
+          python -c "import json, zipfile; payload = json.load(open('cli-export.json', 'r', encoding='utf-8')); assert payload['manifest_name'] == 'export-manifest.json'; assert payload['manifest']['file_count'] >= 7; archive = zipfile.ZipFile('cli-export.zip'); assert 'export-manifest.json' in archive.namelist(); archive.close()"
+          feacopilot \
+            --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load." \
+            --solver-mode mock \
+            --output json > cli-result-2.json
+          export RECENT_RUN_DIR=$(python -c "import json; payload = json.load(open('cli-result-2.json', 'r', encoding='utf-8')); print(payload['artifacts']['run_dir'])")
+          python -c "import os; from datetime import datetime, timedelta, timezone; from pathlib import Path; old_run_dir = Path(os.environ['RUN_DIR']); old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp(); os.utime(old_run_dir / 'run_result.json', (old_time, old_time)); os.utime(old_run_dir, (old_time, old_time))"
+          feacopilot --cleanup-runs --workspace "$FEA_RUNS_DIR" --retention-days 7 --dry-run --output json > cli-cleanup-dry-run.json
+          python -c "import json, os; from pathlib import Path; payload = json.load(open('cli-cleanup-dry-run.json', 'r', encoding='utf-8')); assert payload['summary']['deleted_count'] == 1; assert payload['summary']['retained_count'] == 1; assert Path(os.environ['RUN_DIR']).exists()"
+          feacopilot --cleanup-runs --workspace "$FEA_RUNS_DIR" --retention-days 7 --output json > cli-cleanup.json
+          python -c "import json, os; from pathlib import Path; payload = json.load(open('cli-cleanup.json', 'r', encoding='utf-8')); assert payload['summary']['deleted_count'] == 1; assert payload['summary']['retained_count'] == 1; assert not Path(os.environ['RUN_DIR']).exists(); assert Path(os.environ['RECENT_RUN_DIR']).exists()"
 
   docker-smoke:
     needs: test
