@@ -17,6 +17,10 @@ STRUCTURED_SCHEMA: Dict[str, Any] = {
         "properties": {
             "geometry_type": {"type": "string"},
             "length_m": {"type": "number"},
+            "beam_height_m": {"type": "number"},
+            "beam_width_m": {"type": "number"},
+            "plate_width_m": {"type": "number"},
+            "plate_thickness_m": {"type": "number"},
             "height_m": {"type": "number"},
             "thickness_m": {"type": "number"},
             "width_m": {"type": "number"},
@@ -30,7 +34,6 @@ STRUCTURED_SCHEMA: Dict[str, Any] = {
         "required": [
             "geometry_type",
             "length_m",
-            "height_m",
             "material",
             "boundary_condition",
             "load_type",

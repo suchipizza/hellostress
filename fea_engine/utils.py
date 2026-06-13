@@ -13,17 +13,22 @@ class AnalyticalEstimator:
         material = spec.material or DEFAULT_MATERIALS["steel"]
         load = spec.loads[0]
         length = spec.length
-        height = spec.height
-        width = spec.width or height
-        thickness = spec.thickness or height
 
         if spec.geometry == GeometryType.BEAM:
+            if spec.beam_section is None:
+                raise ValueError("Beam simulations require beam_section dimensions.")
+            height = spec.beam_section.height
+            width = spec.beam_section.width
             inertia = width * height**3 / 12.0
             E = material.youngs_modulus
             force = load.magnitude
             deflection = force * length**3 / (3 * E * inertia)
             max_stress = force * length * (height / 2.0) / inertia
         else:
+            if spec.plate_dimensions is None:
+                raise ValueError("Plate simulations require plate dimensions.")
+            width = spec.plate_dimensions.width
+            thickness = spec.plate_dimensions.thickness
             # Simplified small-deflection clamped rectangular plate under uniform load
             q = load.magnitude / (length * width)
             D = material.youngs_modulus * thickness**3 / (12 * (1 - material.poisson_ratio**2))

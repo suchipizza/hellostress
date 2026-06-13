@@ -22,7 +22,7 @@ class LoadCase:
     load_type: LoadType
     magnitude: float  # Magnitude in SI units (N or Pa)
     direction: str = "-y"
-    location: Optional[float] = None  # relative (0-1) for beams
+    location: Optional[float] = None  # relative (0-1) for beam loads
     description: str = ""
     units: str = "N"
 
@@ -37,19 +37,46 @@ class MaterialSpec:
 
 
 @dataclass
+class BeamSection:
+    height: float  # meters
+    width: float  # meters
+
+
+@dataclass
+class PlateDimensions:
+    width: float  # meters
+    thickness: float  # meters
+
+
+@dataclass
 class SimulationSpec:
     prompt: str
     geometry: GeometryType
     length: float  # meters
-    height: float  # meters (beam thickness/plate height)
-    width: Optional[float] = None  # meters (plate width)
-    thickness: Optional[float] = None  # meters (plate thickness)
+    beam_section: Optional[BeamSection] = None
+    plate_dimensions: Optional[PlateDimensions] = None
     mesh_density: int = 32
     boundary_condition: str = "fixed"
     loads: List[LoadCase] = field(default_factory=list)
     material: Optional[MaterialSpec] = None
     units: str = "SI"
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def beam_height(self) -> Optional[float]:
+        return self.beam_section.height if self.beam_section else None
+
+    @property
+    def beam_width(self) -> Optional[float]:
+        return self.beam_section.width if self.beam_section else None
+
+    @property
+    def plate_width(self) -> Optional[float]:
+        return self.plate_dimensions.width if self.plate_dimensions else None
+
+    @property
+    def plate_thickness(self) -> Optional[float]:
+        return self.plate_dimensions.thickness if self.plate_dimensions else None
 
 
 @dataclass

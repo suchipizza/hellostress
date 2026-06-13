@@ -28,29 +28,42 @@ class FenicsScriptGenerator:
         mesh_nx = max(8, int(spec.mesh_density))
         mesh_ny = max(4, int(spec.mesh_density // 2))
         load = spec.loads[0]
-        width = spec.width or spec.height or 0.1
-        thickness = spec.thickness or spec.height or 0.1
-        cross_section = width * thickness
-        volume = spec.length * cross_section
-        body_force = load.magnitude / max(volume, 1e-6)
-        surface_pressure = load.magnitude
-        if load.load_type == LoadType.PRESSURE:
-            body_force = load.magnitude / max(thickness, 1e-6)
-            surface_pressure = load.magnitude
-        else:
-            surface_pressure = load.magnitude / max(cross_section, 1e-6)
-
         context = {
             "length": spec.length,
-            "height": spec.height,
-            "width": spec.width or spec.height,
             "mesh_nx": mesh_nx,
             "mesh_ny": mesh_ny,
             "youngs_modulus": material.youngs_modulus,
             "poisson_ratio": material.poisson_ratio,
-            "load_density": body_force,
-            "pressure": surface_pressure,
         }
+
+        if spec.geometry == GeometryType.BEAM:
+            if spec.beam_section is None:
+                raise ValueError("Beam simulations require beam_section dimensions.")
+            section = spec.beam_section
+            cross_section = section.width * section.height
+            volume = spec.length * cross_section
+            context.update(
+                {
+                    "height": section.height,
+                    "width": section.width,
+                    "load_density": load.magnitude / max(volume, 1e-6),
+                    "pressure": load.magnitude / max(cross_section, 1e-6),
+                }
+            )
+        else:
+            if spec.plate_dimensions is None:
+                raise ValueError("Plate simulations require plate dimensions.")
+            plate = spec.plate_dimensions
+            body_force = load.magnitude
+            if load.load_type == LoadType.PRESSURE:
+                body_force = load.magnitude / max(plate.thickness, 1e-6)
+            context.update(
+                {
+                    "width": plate.width,
+                    "pressure": load.magnitude,
+                    "load_density": body_force,
+                }
+            )
         return template.render(**context)
 
 

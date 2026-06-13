@@ -27,12 +27,17 @@ class SimulationVisualizer:
         return fig
 
     def _plate_fig(self, spec: SimulationSpec, metrics: dict[str, float]) -> go.Figure:
+        if spec.plate_dimensions is None:
+            raise ValueError("Plate simulations require plate dimensions.")
         size = 40
         x = np.linspace(0, spec.length, size)
-        y = np.linspace(0, spec.width or spec.height, size)
+        y = np.linspace(0, spec.plate_dimensions.width, size)
         xv, yv = np.meshgrid(x, y)
         max_deflection = metrics.get("max_deflection", 0.0)
-        z = max_deflection * (np.sin(np.pi * xv / spec.length) * np.sin(np.pi * yv / (spec.width or spec.height)))
+        z = max_deflection * (
+            np.sin(np.pi * xv / spec.length)
+            * np.sin(np.pi * yv / spec.plate_dimensions.width)
+        )
         fig = go.Figure(
             data=[
                 go.Surface(
