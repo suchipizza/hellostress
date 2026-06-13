@@ -10,9 +10,15 @@ FEA Copilot converts a narrow set of natural-language beam and plate prompts int
 ## Quick Start
 
 1. Create and activate a virtual environment.
-2. Install runtime dependencies with `pip install -r requirements.txt`.
+2. Install the package with `pip install .`.
 3. Launch the app with `streamlit run app.py`.
 4. Start with one of the built-in example prompts.
+
+You can also run a supported prompt without the UI:
+
+```bash
+feacopilot --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load."
+```
 
 ## Supported Prompt Patterns
 
@@ -28,10 +34,24 @@ FEA Copilot converts a narrow set of natural-language beam and plate prompts int
 - Host-local solver execution is intentionally not supported.
 - Backend failures are normalized into user-facing solver errors with log context.
 - Successful runs now include backend status and metadata artifacts in the run directory for debugging.
+- The CLI writes the same backend artifacts as the app, including `run_result.json`.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
+
+## Runtime Defaults
+
+Optional environment variables:
+
+- `FEA_DEFAULT_SOLVER_MODE`
+- `FEA_DEFAULT_MESH_DENSITY`
+- `FEA_DOCKER_IMAGE`
+- `FEA_SOLVER_TIMEOUT_SECONDS`
+- `FEA_RUNS_DIR`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
 
 ## Troubleshooting
 
 - `Prompt must mention either a beam or a plate`: add the geometry explicitly.
 - `Could not determine the load magnitude and units`: include units such as `N`, `kN`, `kPa`, or `MPa`.
 - `Could not determine beam thickness/height`: include a section size such as `50 mm thick`.
+- `Invalid FEA_DEFAULT_SOLVER_MODE ...`: set the variable to `mock`, `docker`, or `auto`.

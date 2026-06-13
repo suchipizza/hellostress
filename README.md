@@ -1,13 +1,8 @@
-# HelloStress 🧠 FEA Copilot
+# HelloStress FEA Copilot
 
-FEA Copilot is a Streamlit-based prototype that converts a narrow class of natural-language structural prompts into structured simulation specs, generated FEniCS scripts, quick estimates, and result summaries.
+FEA Copilot is a narrow-scope structural simulation prototype that turns supported natural-language beam and plate prompts into structured specs, generated FEniCS scripts, quick estimates, and result summaries.
 
-The repository is now on a clean open-source `main` branch with Phase 1 correctness work in place:
-
-- explicit beam and plate data models
-- parser validation and typed user-facing errors
-- parser regression tests and golden script tests
-- user and developer documentation
+Phase 2 closed out the backend hardening round. Phase 3 has started with shared runtime settings, a package-backed CLI, and CI/install paths that are closer to real open-source usage.
 
 ## Current Scope
 
@@ -26,14 +21,23 @@ Unsupported or ambiguous prompts should fail clearly rather than return plausibl
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install '.[dev]'
 streamlit run app.py
 ```
 
-The app defaults to the fast `mock` solver. To prepare Docker-backed execution:
+The default runtime uses the fast `mock` solver. To prepare Docker-backed execution:
 
 ```bash
 docker pull dolfinx/dolfinx:v0.7.3
+```
+
+You can also run the service headlessly:
+
+```bash
+feacopilot \
+  --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load." \
+  --solver-mode mock \
+  --output json
 ```
 
 ## Example Prompts
@@ -45,8 +49,26 @@ docker pull dolfinx/dolfinx:v0.7.3
 
 - `OPENAI_API_KEY`: optional. Enables GPT-assisted parsing and summarization.
 - `OPENAI_MODEL`: optional model override for the OpenAI client.
+- `FEA_DEFAULT_SOLVER_MODE`: optional default solver mode for the UI and CLI. Supported values: `mock`, `docker`, `auto`.
+- `FEA_DEFAULT_MESH_DENSITY`: optional default mesh density for the UI and CLI. Supported range: `12` to `80`.
+- `FEA_DOCKER_IMAGE`: optional Docker image override for solver execution.
+- `FEA_SOLVER_TIMEOUT_SECONDS`: optional backend timeout override in seconds.
+- `FEA_RUNS_DIR`: optional workspace directory for generated runs and artifacts.
 
 You can place these in a local `.env` file.
+
+## Headless CLI
+
+The `feacopilot` console script runs the same service layer used by the app and writes the normal backend artifacts into the configured run workspace.
+
+Common examples:
+
+```bash
+feacopilot --prompt "Analyze a 0.5 m by 0.3 m aluminum plate 5 mm thick under a uniform pressure of 50 kPa."
+feacopilot --prompt-file prompt.txt --output json
+```
+
+CLI JSON output includes status, metrics, warnings, parsed spec details, and the paths to `run_result.json`, `backend_status.json`, `backend_metadata.json`, and `metrics.json`.
 
 ## Local Development
 
@@ -54,14 +76,14 @@ Run the checks used in this repository:
 
 ```bash
 python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
-PYTHONPATH=. pytest -q
+pytest -q
 ```
 
-The Docker-backed smoke test is gated and only runs when explicitly enabled:
+The Docker-backed smoke test is gated and should be run when backend orchestration or artifact contracts change:
 
 ```bash
 docker pull dolfinx/dolfinx:v0.7.3
-RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
+RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
 ```
 
 ## Solver Backend Contract
@@ -99,6 +121,7 @@ Relevant docs:
 - [docs/user-guide.md](docs/user-guide.md)
 - [docs/developer-guide.md](docs/developer-guide.md)
 - [docs/phase-2-plan.md](docs/phase-2-plan.md)
+- [docs/phase-3-plan.md](docs/phase-3-plan.md)
 
 ## Repository Layout
 
@@ -115,18 +138,10 @@ feacopilot/
 └── README.md
 ```
 
-## Phase 2 Status
+## Phase Status
 
-Phase 2 is complete on `main`.
-
-The closeout work delivered:
-
-- a thin UI shell in `app.py`, with orchestration and presentation helpers extracted into the engine layer
-- explicit backend artifact files and a normalized `run_result.json` schema
-- Docker lifecycle hardening with container state inspection and cleanup status capture
-- gated CI smoke coverage for the real container-backed execution path
-
-See [docs/phase-2-plan.md](docs/phase-2-plan.md) for the closeout record.
+- Phase 2 is complete on `main`.
+- Phase 3 is in progress with packaging, shared runtime settings, and CLI groundwork now on the branch.
 
 ## Disclaimer
 

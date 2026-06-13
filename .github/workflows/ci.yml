@@ -21,13 +21,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install '.[dev]'
 
       - name: Compile Python sources
         run: python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
 
       - name: Run tests
-        run: PYTHONPATH=. pytest -q
+        run: pytest -q
+
+      - name: Run CLI mock smoke test
+        run: |
+          feacopilot \
+            --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load." \
+            --solver-mode mock \
+            --output json > cli-result.json
+          python -c "import json; payload = json.load(open('cli-result.json', 'r', encoding='utf-8')); assert payload['status'] == 'completed'; assert payload['solver_mode'] == 'mock'"
 
   docker-smoke:
     needs: test
@@ -45,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install '.[dev]'
 
       - name: Verify Docker runtime
         run: docker version
@@ -56,4 +64,4 @@ jobs:
       - name: Run Docker smoke test
         env:
           RUN_DOCKER_SMOKE: "1"
-        run: PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
+        run: pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke

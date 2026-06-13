@@ -1,27 +1,55 @@
 # Developer Guide
 
-## Phase 1 Architecture
+## Current Architecture
 
-Phase 1 establishes a stricter contract around parsing and validation, and the current Phase 2 start point adds a service layer for orchestration:
+The Phase 1 and Phase 2 work established a stricter parsing and backend contract, and Phase 3 now adds a shared runtime configuration surface:
 
 - `fea_engine/models.py`: explicit geometry-specific data structures.
 - `fea_engine/parser.py`: deterministic prompt parsing with LLM fallback.
 - `fea_engine/validation.py`: supported-scope validation rules.
 - `fea_engine/errors.py`: typed application errors for UI-safe handling.
+- `fea_engine/settings.py`: validated runtime settings sourced from environment variables.
 - `fea_engine/service.py`: end-to-end simulation orchestration outside the Streamlit UI.
+- `fea_engine/cli.py`: headless CLI entry point backed by the same service layer as the UI.
 
 ## Local Setup
 
 1. Create and activate `.venv`.
-2. Install runtime dependencies with `pip install -r requirements.txt`.
-3. Install test dependencies with `pip install -r requirements-dev.txt`.
+2. Install the package and test extras with `pip install '.[dev]'`.
 
 ## Test Suite
 
 - Unit tests live in `tests/test_parser.py` and `tests/test_validation.py`.
 - Golden template tests live in `tests/test_generator_golden.py`.
 - Run all tests with `pytest -q`.
-- The gated Docker integration smoke test lives in `tests/test_integration_docker_smoke.py` and should be run with `RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke`.
+- The CLI coverage lives in `tests/test_cli.py`.
+- The gated Docker integration smoke test lives in `tests/test_integration_docker_smoke.py` and should be run with `RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke`.
+
+## Runtime Configuration
+
+Phase 3 introduces a single runtime settings source consumed by the UI, service defaults, and CLI.
+
+- `FEA_DEFAULT_SOLVER_MODE`: `mock`, `docker`, or `auto`
+- `FEA_DEFAULT_MESH_DENSITY`: integer default for UI and CLI runs, validated in the `12` to `80` range
+- `FEA_DOCKER_IMAGE`: Docker image used for backend execution
+- `FEA_SOLVER_TIMEOUT_SECONDS`: backend timeout in seconds
+- `FEA_RUNS_DIR`: workspace for generated run directories and artifacts
+- `OPENAI_MODEL`: optional model override for parser/summarizer LLM assistance
+
+Invalid values raise `ConfigurationError` early rather than silently falling back.
+
+## CLI Usage
+
+The installed console script uses the same `SimulationService` path as `app.py`:
+
+```bash
+feacopilot \
+  --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load." \
+  --solver-mode mock \
+  --output json
+```
+
+Use this path for automation, reproducible debugging, and future non-Streamlit integrations.
 
 ## Design Notes
 
@@ -31,6 +59,7 @@ Phase 1 establishes a stricter contract around parsing and validation, and the c
 - `SimulationService` is now the preferred entry point for app-level orchestration tests and future API/service extraction work.
 - `FenicsSolver` now exposes a stricter artifact contract and only supports `mock`, `docker`, and `auto`.
 - `app.py` should stay a UI shell. Presentation helpers belong in engine modules so they can be tested without Streamlit.
+- Shared defaults should flow through `RuntimeSettings` instead of new ad hoc environment lookups.
 
 ## Solver Artifact Contract
 
@@ -75,12 +104,12 @@ It captures:
 
 ## Repository Standards
 
-- Use `PYTHONPATH=. pytest -q` for local test runs.
+- Use `pytest -q` for local test runs after the editable install.
 - Keep local tooling artifacts out of Git via `.gitignore`.
 - Treat `app.py` as the UI shell, not the orchestration layer.
 
 ## Next Documentation Targets
 
 - Deployment guide for containerized execution
-- Operations/runbook documentation
+- Operations/runbook documentation for artifact inspection and failure handling
 - API/service-layer documentation for non-Streamlit entry points

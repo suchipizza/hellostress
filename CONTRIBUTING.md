@@ -7,15 +7,16 @@ This repository is being prepared as an open-source engineering prototype. Contr
 ## Before You Start
 
 - Read [README.md](README.md) for current product scope.
-- Read [docs/developer-guide.md](docs/developer-guide.md) for the Phase 1 architecture.
-- Read [docs/phase-2-plan.md](docs/phase-2-plan.md) if you are working on the next hardening round.
+- Read [docs/developer-guide.md](docs/developer-guide.md) for the current architecture.
+- Read [docs/phase-2-plan.md](docs/phase-2-plan.md) for the backend hardening closeout.
+- Read [docs/phase-3-plan.md](docs/phase-3-plan.md) for the current OSS-readiness workstream.
 
 ## Local Setup
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install '.[dev]'
 ```
 
 ## Required Checks
@@ -24,14 +25,14 @@ Run these before opening a PR:
 
 ```bash
 python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
-PYTHONPATH=. pytest -q
+pytest -q
 ```
 
 Run the Docker-backed smoke path when you touch backend orchestration, artifact schemas, or CI:
 
 ```bash
 docker pull dolfinx/dolfinx:v0.7.3
-RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
+RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
 ```
 
 ## Contribution Rules
@@ -41,6 +42,7 @@ RUN_DOCKER_SMOKE=1 PYTHONPATH=. pytest -q tests/test_integration_docker_smoke.py
 - Preserve the current supported-scope contract unless the PR clearly expands it and adds tests.
 - Add tests for behavior changes. Parser, validation, and template changes should not land without coverage.
 - Do not commit local environment files, caches, or generated artifacts.
+- Route new shared runtime defaults through `fea_engine/settings.py` rather than new ad hoc environment lookups.
 
 ## Pull Request Expectations
 
@@ -67,4 +69,4 @@ Review should focus on:
 - clearer validation errors
 - documentation improvements
 - CI and developer-experience improvements
-- Phase 2 service-layer prep that preserves current behavior
+- Phase 3 packaging, CLI, and configuration improvements that preserve current behavior

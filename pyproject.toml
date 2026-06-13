@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "feacopilot"
+version = "0.3.0"
+description = "Narrow-scope natural-language FEA Copilot for simple beam and plate workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "HelloStress" }]
+dependencies = [
+  "streamlit>=1.32",
+  "openai>=1.12",
+  "jinja2>=3.1",
+  "plotly>=5.18",
+  "numpy>=1.26",
+  "python-dotenv>=1.0",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+feacopilot = "fea_engine.cli:main"
+
+[project.urls]
+Repository = "https://github.com/suchipizza/hellostress"
+
+[tool.setuptools.packages.find]
+include = ["fea_engine*", "templates*"]
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: integration and smoke tests that may rely on external runtimes",
+]

@@ -46,7 +46,7 @@ Acceptance:
 
 Acceptance:
 
-- `pip install -e '.[dev]'` works on a clean environment.
+- `pip install '.[dev]'` works on a clean environment.
 - A `feacopilot` console script is installed.
 - CI validates the package installation path.
 
