@@ -1,4 +1,4 @@
-# 🧠 FEA Copilot
+# HelloStress 🧠 FEA Copilot
 
 FEA Copilot is a Streamlit-based prototype that converts a narrow class of natural-language structural prompts into structured simulation specs, generated FEniCS scripts, quick estimates, and result summaries.
 
