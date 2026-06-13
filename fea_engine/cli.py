@@ -314,6 +314,8 @@ def render_text_summary(payload: dict[str, object]) -> str:
 def render_inspection_summary(payload: dict[str, object]) -> str:
     compatibility = payload["compatibility"]
     diagnostics = payload["diagnostics"]
+    triage = payload["triage"]
+    backend_context = triage["backend_context"]
     paths = payload["paths"]
     warnings = payload["warnings"]
     lines = [
@@ -326,11 +328,19 @@ def render_inspection_summary(payload: dict[str, object]) -> str:
         f"Backend status: {payload['backend_status']}",
         f"Metrics source: {payload['metrics_source']}",
         f"Fallback used: {payload['fallback_used']}",
+        f"Triage severity: {triage['severity']}",
         "Diagnostics:",
         f"  all_referenced_files_present: {diagnostics['all_referenced_files_present']}",
         f"  all_embedded_payloads_consistent: {diagnostics['all_embedded_payloads_consistent']}",
         f"  metrics_present: {diagnostics['metrics_present']}",
         f"  generated_file_count: {diagnostics['generated_file_count']}",
+        "Backend context:",
+        f"  exit_code: {backend_context['exit_code']}",
+        f"  timed_out: {backend_context['timed_out']}",
+        f"  container_status: {backend_context['container_status']}",
+        f"  cleanup_status: {backend_context['cleanup_status']}",
+        f"  stdout_excerpt: {backend_context['stdout_excerpt'] or '(empty)'}",
+        f"  stderr_excerpt: {backend_context['stderr_excerpt'] or '(empty)'}",
         "Paths:",
         f"  run_result: {paths['run_result_path']}",
         f"  backend_status: {paths['backend_status_path']}",
@@ -342,6 +352,18 @@ def render_inspection_summary(payload: dict[str, object]) -> str:
         f"  stdout: {paths['stdout_path']}",
         f"  stderr: {paths['stderr_path']}",
     ]
+    if triage["issues"]:
+        lines.append("Issues:")
+        lines.extend(
+            f"  - [{issue['severity']}] {issue['code']}: {issue['message']}"
+            + (f" Path: {issue['path']}" if issue.get("path") else "")
+            for issue in triage["issues"]
+        )
+    else:
+        lines.append("Issues: none")
+    if triage["suggested_actions"]:
+        lines.append("Suggested actions:")
+        lines.extend(f"  - {action}" for action in triage["suggested_actions"])
     if warnings:
         lines.append("Warnings:")
         lines.extend(f"  - {warning}" for warning in warnings)

@@ -11,6 +11,7 @@ The target is a more machine-friendly and supportable run artifact surface witho
 - explicit artifact schema versioning
 - reusable artifact loading and validation utilities
 - CLI inspection for completed runs
+- operator-oriented inspection triage for degraded runs
 - updated docs for artifact consumers and operators
 
 ## Ticket Sequence
@@ -54,6 +55,17 @@ Acceptance:
 
 - README and developer docs explain the artifact schema versioning and inspection path.
 - Repo status text reflects Phase 3 complete and Phase 4 in progress.
+
+### P4-05. Inspection Triage
+
+- Extend inspection output so valid-but-degraded bundles report actionable issues, backend context, and suggested remediation.
+- Keep the persisted artifact files stable; this is an inspection/reporting enhancement, not a new artifact schema.
+
+Acceptance:
+
+- Inspection JSON exposes issue severity, issue codes, backend log context, and suggested actions.
+- Inspection text output surfaces the same triage summary for operators without requiring JSON parsing.
+- Tests cover degraded bundles such as missing metrics, fallback use, and incomplete Docker cleanup.
 
 ## Out of Scope
 

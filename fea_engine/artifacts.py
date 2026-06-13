@@ -140,6 +140,7 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
     run_result = bundle.run_result
     artifacts = run_result["artifacts"]
     diagnostics = _build_diagnostics(bundle)
+    triage = _build_triage(bundle, diagnostics)
     return {
         "valid": True,
         "schema_version": run_result["schema_version"],
@@ -160,6 +161,7 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
         "fallback_used": run_result["fallback_used"],
         "warnings": run_result["warnings"],
         "diagnostics": diagnostics,
+        "triage": triage,
         "paths": {
             "run_result_path": str(bundle.run_result_path),
             "backend_status_path": str(bundle.backend_status_path),
@@ -349,11 +351,205 @@ def _build_diagnostics(bundle: ArtifactBundle) -> dict[str, Any]:
         "all_referenced_files_present": all_files_present,
         "all_embedded_payloads_consistent": all_consistent,
         "path_checks": path_checks,
+        "path_targets": {name: str(path) for name, path in referenced_paths.items()},
         "generated_file_checks": generated_file_checks,
         "consistency_checks": consistency_checks,
         "generated_file_count": len(generated_files),
+        "generated_file_paths": [str(path) for path in generated_files],
         "metrics_present": bool(bundle.backend_status["metrics_present"]),
+        "run_warning_count": len(run_result["warnings"]),
     }
+
+
+def _build_triage(bundle: ArtifactBundle, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    run_result = bundle.run_result
+    backend_status = bundle.backend_status
+    run_metadata = run_result["run_metadata"]
+    issues: list[dict[str, Any]] = []
+    suggested_actions: list[str] = []
+
+    for name, exists in diagnostics["path_checks"].items():
+        if not exists:
+            issues.append(
+                _triage_issue(
+                    "error",
+                    "missing_referenced_file",
+                    f"Referenced artifact path '{name}' is missing.",
+                    path=diagnostics["path_targets"][name],
+                )
+            )
+
+    for path, exists in diagnostics["generated_file_checks"].items():
+        if not exists:
+            issues.append(
+                _triage_issue(
+                    "error",
+                    "missing_generated_file",
+                    "Generated file referenced by the run artifact is missing.",
+                    path=path,
+                )
+            )
+
+    for name, consistent in diagnostics["consistency_checks"].items():
+        if not consistent:
+            issues.append(
+                _triage_issue(
+                    "error",
+                    "artifact_inconsistency",
+                    f"Artifact consistency check '{name}' failed.",
+                )
+            )
+
+    if backend_status["timed_out"]:
+        issues.append(
+            _triage_issue(
+                "error",
+                "backend_timed_out",
+                f"Backend execution timed out in {run_result['backend_mode']} mode.",
+            )
+        )
+        _append_action(
+            suggested_actions,
+            f"Inspect stderr log at {run_metadata['stderr_path']} and rerun the simulation with a higher timeout if needed.",
+        )
+    elif backend_status["status"] != "succeeded":
+        issues.append(
+            _triage_issue(
+                "error",
+                "backend_failed",
+                (
+                    f"Backend execution finished with status '{backend_status['status']}' "
+                    f"and exit code {backend_status['exit_code']}."
+                ),
+            )
+        )
+        _append_action(
+            suggested_actions,
+            f"Inspect stderr log at {run_metadata['stderr_path']} and backend_status.json for solver failure details.",
+        )
+
+    if not diagnostics["metrics_present"]:
+        metric_issue_severity = "warning" if run_result["fallback_used"] else "error"
+        issues.append(
+            _triage_issue(
+                metric_issue_severity,
+                "metrics_missing",
+                "The backend did not report solver metrics for this run.",
+                path=run_result["artifacts"]["metrics_path"],
+            )
+        )
+        _append_action(
+            suggested_actions,
+            "Confirm whether fallback-derived metrics are acceptable before promoting or exporting this run.",
+        )
+
+    if run_result["fallback_used"]:
+        issues.append(
+            _triage_issue(
+                "warning",
+                "fallback_used",
+                "Post-processing fell back to analytical estimates instead of solver-produced metrics.",
+            )
+        )
+        _append_action(
+            suggested_actions,
+            "Treat fallback-derived metrics as lower confidence than solver-produced metrics.",
+        )
+
+    for warning in run_result["warnings"]:
+        issues.append(
+            _triage_issue(
+                "warning",
+                "run_warning",
+                warning,
+            )
+        )
+        _append_action(
+            suggested_actions,
+            "Review run warnings and log excerpts before promoting this artifact for automation or export.",
+        )
+
+    cleanup_status = backend_status["cleanup_status"]
+    if run_result["backend_mode"] == "docker" and cleanup_status not in {"removed", "not_applicable", "not_needed"}:
+        issues.append(
+            _triage_issue(
+                "warning",
+                "container_cleanup_incomplete",
+                f"Docker cleanup completed with status '{cleanup_status}'.",
+            )
+        )
+        container_id = backend_status.get("container_id")
+        if container_id:
+            _append_action(
+                suggested_actions,
+                f"Check whether Docker container {container_id} still exists and remove it manually if cleanup did not finish.",
+            )
+
+    if any(issue["severity"] == "error" for issue in issues):
+        severity = "error"
+    elif issues:
+        severity = "warning"
+    else:
+        severity = "ok"
+        _append_action(
+            suggested_actions,
+            "Bundle passed inspection; it is ready for export, retention, or downstream automation under the current compatibility policy.",
+        )
+
+    if any(issue["code"] in {"missing_referenced_file", "missing_generated_file", "artifact_inconsistency"} for issue in issues):
+        _append_action(
+            suggested_actions,
+            "Re-run the simulation before exporting or automating against this bundle because the artifact set is incomplete or inconsistent.",
+        )
+
+    if severity == "error":
+        _append_action(
+            suggested_actions,
+            f"Inspect backend artifacts at {bundle.backend_status_path} and {bundle.backend_metadata_path} before deciding whether to retain this run.",
+        )
+
+    return {
+        "severity": severity,
+        "issue_count": len(issues),
+        "error_count": sum(1 for issue in issues if issue["severity"] == "error"),
+        "warning_count": sum(1 for issue in issues if issue["severity"] == "warning"),
+        "issues": issues,
+        "suggested_actions": suggested_actions,
+        "backend_context": {
+            "status": backend_status["status"],
+            "exit_code": backend_status["exit_code"],
+            "timed_out": backend_status["timed_out"],
+            "container_id": backend_status["container_id"],
+            "container_status": backend_status["container_status"],
+            "cleanup_status": backend_status["cleanup_status"],
+            "stdout_path": run_metadata["stdout_path"],
+            "stderr_path": run_metadata["stderr_path"],
+            "stdout_excerpt": run_metadata["stdout_excerpt"],
+            "stderr_excerpt": run_metadata["stderr_excerpt"],
+        },
+    }
+
+
+def _triage_issue(
+    severity: str,
+    code: str,
+    message: str,
+    *,
+    path: str | None = None,
+) -> dict[str, Any]:
+    issue = {
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if path is not None:
+        issue["path"] = path
+    return issue
+
+
+def _append_action(actions: list[str], message: str) -> None:
+    if message not in actions:
+        actions.append(message)
 
 
 def _bundle_files(bundle: ArtifactBundle) -> list[Path]:

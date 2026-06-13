@@ -132,6 +132,7 @@ def test_cli_can_inspect_run_result_json(tmp_path: Path) -> None:
     assert inspection_payload["status"] == "completed"
     assert inspection_payload["backend_status"] == "succeeded"
     assert inspection_payload["diagnostics"]["all_referenced_files_present"] is True
+    assert inspection_payload["triage"]["severity"] == "ok"
 
 
 def test_cli_can_inspect_run_directory(tmp_path: Path) -> None:
@@ -159,6 +160,57 @@ def test_cli_can_inspect_run_directory(tmp_path: Path) -> None:
     assert "Schema version: 1" in output
     assert "Compatibility supported: True" in output
     assert "Run status: completed" in output
+    assert "Triage severity: ok" in output
+    assert "Issues: none" in output
+
+
+def test_cli_inspection_reports_triage_for_degraded_bundle(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    initial_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=initial_stdout,
+        stderr=io.StringIO(),
+    )
+    run_payload = json.loads(initial_stdout.getvalue())
+    result_schema_path = Path(run_payload["artifacts"]["result_schema_path"])
+    run_result_payload = json.loads(result_schema_path.read_text(encoding="utf-8"))
+
+    backend_status_path = Path(run_payload["artifacts"]["backend_status_path"])
+    backend_status_payload = json.loads(backend_status_path.read_text(encoding="utf-8"))
+    backend_status_payload["status"] = "timed_out"
+    backend_status_payload["exit_code"] = -1
+    backend_status_payload["timed_out"] = True
+    backend_status_payload["metrics_present"] = False
+    backend_status_payload["container_id"] = "container-123"
+    backend_status_payload["container_status"] = "exited"
+    backend_status_payload["cleanup_status"] = "remove_failed"
+    backend_status_path.write_text(json.dumps(backend_status_payload), encoding="utf-8")
+
+    run_result_payload["status"] = "completed_with_fallback"
+    run_result_payload["backend_mode"] = "docker"
+    run_result_payload["backend_status"] = "timed_out"
+    run_result_payload["fallback_used"] = True
+    run_result_payload["warnings"] = ["Metrics fallback engaged after backend timeout."]
+    run_result_payload["backend_status_details"] = backend_status_payload
+    result_schema_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
+
+    Path(run_payload["artifacts"]["metrics_path"]).unlink()
+
+    inspect_stdout = io.StringIO()
+    inspect_exit_code = main(
+        ["--inspect-run-result", str(result_schema_path)],
+        stdout=inspect_stdout,
+        stderr=io.StringIO(),
+    )
+
+    assert inspect_exit_code == 0
+    output = inspect_stdout.getvalue()
+    assert "Triage severity: error" in output
+    assert "[error] backend_timed_out" in output
+    assert "[warning] fallback_used" in output
+    assert "Suggested actions:" in output
 
 
 def test_cli_inspection_returns_non_zero_for_unsupported_schema_version(tmp_path: Path) -> None:

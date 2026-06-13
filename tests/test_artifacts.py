@@ -164,6 +164,48 @@ def test_build_bundle_summary_reports_inconsistent_embedded_payloads(tmp_path: P
     assert summary["diagnostics"]["consistency_checks"]["embedded_backend_status_matches_file"] is False
 
 
+def test_build_bundle_summary_reports_triage_issues_for_degraded_run(tmp_path: Path) -> None:
+    run_result_path = write_bundle(tmp_path)
+    run_result_payload = json.loads(run_result_path.read_text(encoding="utf-8"))
+    backend_status_path = Path(run_result_payload["artifacts"]["backend_status_path"])
+    backend_status_payload = json.loads(backend_status_path.read_text(encoding="utf-8"))
+
+    backend_status_payload["status"] = "timed_out"
+    backend_status_payload["exit_code"] = -1
+    backend_status_payload["timed_out"] = True
+    backend_status_payload["metrics_present"] = False
+    backend_status_payload["container_id"] = "container-123"
+    backend_status_payload["container_status"] = "exited"
+    backend_status_payload["cleanup_status"] = "remove_failed"
+    backend_status_path.write_text(json.dumps(backend_status_payload), encoding="utf-8")
+
+    run_result_payload["status"] = "completed_with_fallback"
+    run_result_payload["backend_mode"] = "docker"
+    run_result_payload["backend_status"] = "timed_out"
+    run_result_payload["fallback_used"] = True
+    run_result_payload["warnings"] = ["Metrics fallback engaged after backend timeout."]
+    run_result_payload["backend_status_details"] = backend_status_payload
+    run_result_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
+
+    metrics_path = Path(run_result_payload["artifacts"]["metrics_path"])
+    metrics_path.unlink()
+
+    bundle = load_artifact_bundle(run_result_path)
+    summary = build_bundle_summary(bundle)
+    issue_codes = {issue["code"] for issue in summary["triage"]["issues"]}
+
+    assert summary["triage"]["severity"] == "error"
+    assert summary["triage"]["error_count"] >= 3
+    assert "backend_timed_out" in issue_codes
+    assert "metrics_missing" in issue_codes
+    assert "fallback_used" in issue_codes
+    assert "container_cleanup_incomplete" in issue_codes
+    assert "missing_referenced_file" in issue_codes
+    assert "missing_generated_file" in issue_codes
+    assert any("stderr log" in action for action in summary["triage"]["suggested_actions"])
+    assert any("Re-run the simulation" in action for action in summary["triage"]["suggested_actions"])
+
+
 def test_export_artifact_bundle_writes_zip_with_expected_files(tmp_path: Path) -> None:
     run_result_path = write_bundle(tmp_path)
     export_result = export_artifact_bundle(run_result_path)

@@ -128,6 +128,7 @@ Phase 4 defines a machine-readable compatibility boundary for persisted run arti
 - `MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION` and `MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION` define the accepted read range.
 - Inspection fails fast on unsupported schema versions instead of attempting a best-effort parse.
 - Inspection diagnostics also verify referenced file presence and consistency between `run_result.json` embedded payloads and the referenced backend artifact files.
+- Inspection triage now classifies degraded bundles with machine-readable issue codes, severity, backend log context, and suggested operator actions.
 - Export first validates the bundle, then writes a zip archive rooted at the run directory.
 - Export archives now include `export-manifest.json` with per-file relative paths, sizes, and SHA-256 checksums for downstream verification.
 - Cleanup applies retention rules to direct child run directories in the configured workspace and supports `keep_latest` plus `dry_run`.

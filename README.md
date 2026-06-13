@@ -134,6 +134,7 @@ The current compatibility policy is strict and explicit:
 
 - supported artifact bundles must declare a `schema_version` within the currently supported range
 - the CLI inspection path validates referenced files and checks that embedded payloads match the referenced backend artifact files
+- the CLI inspection path now also emits triage severity, issue codes, backend log context, and suggested actions for degraded bundles
 - unsupported schema versions fail fast instead of being interpreted optimistically
 - the CLI export path writes a zip archive of the validated bundle for handoff or archival
 - export archives now include `export-manifest.json` with per-file SHA-256 hashes and bundle metadata

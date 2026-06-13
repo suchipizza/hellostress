@@ -38,8 +38,15 @@ Inspection verifies:
 - presence of referenced files
 - consistency between embedded payloads and referenced backend artifact files
 - basic generated-file and metrics diagnostics
+- triage severity, issue codes, backend log context, and suggested next actions
 
 If inspection fails, treat the run as unsupported or incomplete instead of attempting best-effort recovery.
+
+If inspection succeeds but reports triage issues, treat the bundle as readable but degraded. The JSON inspection payload is intended to support automation such as:
+
+- blocking export of incomplete bundles
+- routing timed-out or failed runs to backend troubleshooting
+- flagging fallback-derived metrics for manual review
 
 ## Export Workflow
 
