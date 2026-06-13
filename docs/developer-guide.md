@@ -1,0 +1,34 @@
+# Developer Guide
+
+## Phase 1 Architecture
+
+Phase 1 establishes a stricter contract around parsing and validation:
+
+- `fea_engine/models.py`: explicit geometry-specific data structures.
+- `fea_engine/parser.py`: deterministic prompt parsing with LLM fallback.
+- `fea_engine/validation.py`: supported-scope validation rules.
+- `fea_engine/errors.py`: typed application errors for UI-safe handling.
+
+## Local Setup
+
+1. Create and activate `.venv`.
+2. Install runtime dependencies with `pip install -r requirements.txt`.
+3. Install test dependencies with `pip install -r requirements-dev.txt`.
+
+## Test Suite
+
+- Unit tests live in `tests/test_parser.py` and `tests/test_validation.py`.
+- Golden template tests live in `tests/test_generator_golden.py`.
+- Run all tests with `pytest -q`.
+
+## Design Notes
+
+- The parser is intentionally narrow. Unsupported or ambiguous prompts should fail clearly.
+- Validation is separate from parsing so future API entry points can reuse the same rules.
+- Golden tests are used to catch unintended script-template regressions.
+
+## Next Documentation Targets
+
+- Deployment guide for containerized execution
+- Operations/runbook documentation
+- API/service-layer documentation once the UI orchestration is extracted

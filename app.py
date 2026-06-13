@@ -7,6 +7,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from fea_engine import (
+    FEACopilotError,
     FenicsScriptGenerator,
     FenicsSolver,
     PromptParser,
@@ -19,7 +20,7 @@ from fea_engine.models import SimulationSpec
 load_dotenv()
 
 st.set_page_config(page_title="FEA Copilot", layout="wide")
-st.title("🧠 HelloStress - FEA Copilot")
+st.title(" HelloStress - FEA Copilot")
 st.write(
     "Describe a simple beam or plate scenario in plain English. We'll parse it, "
     "generate a FEniCS script, and provide quick insights."
@@ -107,5 +108,7 @@ if run_clicked:
 
             st.subheader("Parsed specification")
             st.json(spec_to_dict(spec))
+        except FEACopilotError as exc:
+            status_placeholder.error(str(exc))
         except Exception as exc:  # pragma: no cover
             status_placeholder.error(f"Failed to complete simulation: {exc}")

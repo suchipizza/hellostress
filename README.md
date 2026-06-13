@@ -1,4 +1,4 @@
-# 🧠 FEA Copilot MVP
+# 🧠 FEA Copilot
 
 Natural-language assistant that converts prompts for simple beam/plate simulations into FEniCS scripts, runs them, and visualizes the results in Streamlit.
 
@@ -24,6 +24,11 @@ docker pull dolfinx/dolfinx:v0.7.3
 
 You can create a `.env` file in the project root so the Streamlit app picks it up automatically.
 
+## Documentation
+
+- User guide: [docs/user-guide.md](docs/user-guide.md)
+- Developer guide: [docs/developer-guide.md](docs/developer-guide.md)
+
 ## Project Layout
 
 ```
@@ -41,7 +46,19 @@ feacopilot/
 │   ├── postprocessor.py    # Loads solver metrics
 │   ├── visualizer.py       # Plotly figures
 │   ├── summarizer.py       # LLM + fallback summary text
-│   └── utils.py            # Analytical beam/plate estimates
+│   ├── utils.py            # Analytical beam/plate estimates
+│   ├── validation.py       # Simulation validation rules
+│   └── errors.py           # Typed application errors
+├── docs/
+│   ├── user-guide.md
+│   └── developer-guide.md
+├── tests/
+│   ├── test_parser.py
+│   ├── test_validation.py
+│   ├── test_generator_golden.py
+│   └── golden/
+│       ├── beam_simulation.py
+│       └── plate_simulation.py
 └── templates/
     ├── beam_template.py
     └── plate_template.py
@@ -59,12 +76,22 @@ feacopilot/
 
 If Docker/FEniCS is unavailable, the mock mode still provides ballpark deflection/stress numbers via classical formulas.
 
+The parser is intentionally narrow in this phase. Unsupported or ambiguous prompts now fail explicitly instead of silently guessing.
+
 ## Testing & Linting
 
-The MVP does not ship with a test suite yet; recommended next steps include:
-- Unit tests for `PromptParser` heuristics
-- Golden tests for template generation
-- Integration test that exercises the mock solver path
+Install dev dependencies and run the test suite with:
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+Phase 1 adds:
+
+- Parser regression tests for dimensions, units, and supported prompt shapes
+- Validation tests for the supported simulation contract
+- Golden tests for generated beam and plate scripts
 
 ## Disclaimer
 
