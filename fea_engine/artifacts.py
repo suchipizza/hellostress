@@ -9,6 +9,8 @@ from .errors import ArtifactValidationError
 
 
 ARTIFACT_SCHEMA_VERSION = 1
+MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION = 1
+MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION = ARTIFACT_SCHEMA_VERSION
 
 RUN_RESULT_REQUIRED_KEYS = {
     "schema_version",
@@ -111,22 +113,38 @@ def validate_backend_metadata_payload(payload: dict[str, Any], *, path: Path | N
 
 def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
     run_result = bundle.run_result
+    artifacts = run_result["artifacts"]
+    diagnostics = _build_diagnostics(bundle)
     return {
         "valid": True,
         "schema_version": run_result["schema_version"],
+        "compatibility": {
+            "supported": True,
+            "current_schema_version": ARTIFACT_SCHEMA_VERSION,
+            "minimum_supported_schema_version": MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
+            "maximum_supported_schema_version": MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
+            "policy": (
+                "Artifact bundles are supported when every artifact file declares a schema_version "
+                f"between {MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION} and {MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION}."
+            ),
+        },
         "status": run_result["status"],
         "backend_mode": run_result["backend_mode"],
         "backend_status": run_result["backend_status"],
         "metrics_source": run_result["metrics_source"],
         "fallback_used": run_result["fallback_used"],
         "warnings": run_result["warnings"],
+        "diagnostics": diagnostics,
         "paths": {
             "run_result_path": str(bundle.run_result_path),
             "backend_status_path": str(bundle.backend_status_path),
             "backend_metadata_path": str(bundle.backend_metadata_path),
-            "run_dir": bundle.run_result["artifacts"]["run_dir"],
-            "metrics_path": bundle.run_result["artifacts"]["metrics_path"],
-            "script_path": bundle.run_result["artifacts"]["script_path"],
+            "run_dir": artifacts["run_dir"],
+            "results_dir": artifacts["results_dir"],
+            "metrics_path": artifacts["metrics_path"],
+            "script_path": artifacts["script_path"],
+            "stdout_path": run_result["run_metadata"]["stdout_path"],
+            "stderr_path": run_result["run_metadata"]["stderr_path"],
         },
     }
 
@@ -159,13 +177,57 @@ def _validate_required_keys(
 
 def _validate_schema_version(payload: dict[str, Any], *, artifact_name: str, path: Path | None) -> None:
     version = payload.get("schema_version")
-    if version != ARTIFACT_SCHEMA_VERSION:
+    if not isinstance(version, int):
         raise ArtifactValidationError(
             _with_path(
-                f"{artifact_name} schema_version must be {ARTIFACT_SCHEMA_VERSION}; got {version!r}.",
+                f"{artifact_name} schema_version must be an integer; got {version!r}.",
                 path,
             )
         )
+    if version < MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION or version > MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION:
+        raise ArtifactValidationError(
+            _with_path(
+                f"{artifact_name} schema_version {version} is unsupported; supported range is "
+                f"{MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION}..{MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION}.",
+                path,
+            )
+        )
+
+
+def _build_diagnostics(bundle: ArtifactBundle) -> dict[str, Any]:
+    run_result = bundle.run_result
+    artifacts = run_result["artifacts"]
+    generated_files = [Path(path) for path in artifacts.get("generated_files", [])]
+    referenced_paths = {
+        "run_dir": Path(artifacts["run_dir"]),
+        "results_dir": Path(artifacts["results_dir"]),
+        "script_path": Path(artifacts["script_path"]),
+        "metrics_path": Path(artifacts["metrics_path"]),
+        "backend_status_path": bundle.backend_status_path,
+        "backend_metadata_path": bundle.backend_metadata_path,
+        "stdout_path": Path(run_result["run_metadata"]["stdout_path"]),
+        "stderr_path": Path(run_result["run_metadata"]["stderr_path"]),
+    }
+    path_checks = {name: path.exists() for name, path in referenced_paths.items()}
+    generated_file_checks = {str(path): path.exists() for path in generated_files}
+    consistency_checks = {
+        "embedded_backend_status_matches_file": run_result["backend_status_details"] == bundle.backend_status,
+        "embedded_backend_metadata_matches_file": run_result["backend_metadata"] == bundle.backend_metadata,
+        "run_result_backend_status_matches_backend_status_file": run_result["backend_status"] == bundle.backend_status["status"],
+        "run_result_backend_mode_matches_backend_status_file": run_result["backend_mode"] == bundle.backend_status["backend_mode"],
+        "run_result_backend_mode_matches_backend_metadata_file": run_result["backend_mode"] == bundle.backend_metadata["backend_mode"],
+    }
+    all_files_present = all(path_checks.values()) and all(generated_file_checks.values())
+    all_consistent = all(consistency_checks.values())
+    return {
+        "all_referenced_files_present": all_files_present,
+        "all_embedded_payloads_consistent": all_consistent,
+        "path_checks": path_checks,
+        "generated_file_checks": generated_file_checks,
+        "consistency_checks": consistency_checks,
+        "generated_file_count": len(generated_files),
+        "metrics_present": bool(bundle.backend_status["metrics_present"]),
+    }
 
 
 def _coerce_path(value: Any, field_name: str, run_result_path: Path) -> Path:
@@ -185,6 +247,8 @@ def _with_path(message: str, path: Path | None) -> str:
 __all__ = [
     "ARTIFACT_SCHEMA_VERSION",
     "ArtifactBundle",
+    "MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
+    "MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "build_bundle_summary",
     "load_artifact_bundle",
     "validate_backend_metadata_payload",

@@ -121,6 +121,12 @@ The service layer also writes `run_result.json`, which normalizes:
 
 As of Phase 4, `backend_status.json`, `backend_metadata.json`, and `run_result.json` also carry an explicit `schema_version` field so automation can validate the contract before consuming a run.
 
+The current compatibility policy is strict and explicit:
+
+- supported artifact bundles must declare a `schema_version` within the currently supported range
+- the CLI inspection path validates referenced files and checks that embedded payloads match the referenced backend artifact files
+- unsupported schema versions fail fast instead of being interpreted optimistically
+
 ## Contributing
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md).

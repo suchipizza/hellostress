@@ -42,6 +42,7 @@ feacopilot --inspect-run-dir /path/to/run
 - Successful runs now include backend status and metadata artifacts in the run directory for debugging.
 - The CLI writes the same backend artifacts as the app, including `run_result.json`.
 - Run artifacts now include a `schema_version` field for contract validation.
+- The CLI inspection command now reports compatibility status, referenced file presence, and artifact consistency checks.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 
 ## Runtime Defaults

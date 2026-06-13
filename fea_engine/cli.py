@@ -189,23 +189,35 @@ def render_text_summary(payload: dict[str, object]) -> str:
 
 
 def render_inspection_summary(payload: dict[str, object]) -> str:
+    compatibility = payload["compatibility"]
+    diagnostics = payload["diagnostics"]
     paths = payload["paths"]
     warnings = payload["warnings"]
     lines = [
         "Inspection: valid",
         f"Schema version: {payload['schema_version']}",
+        f"Compatibility supported: {compatibility['supported']}",
+        f"Supported schema range: {compatibility['minimum_supported_schema_version']}..{compatibility['maximum_supported_schema_version']}",
         f"Run status: {payload['status']}",
         f"Backend mode: {payload['backend_mode']}",
         f"Backend status: {payload['backend_status']}",
         f"Metrics source: {payload['metrics_source']}",
         f"Fallback used: {payload['fallback_used']}",
+        "Diagnostics:",
+        f"  all_referenced_files_present: {diagnostics['all_referenced_files_present']}",
+        f"  all_embedded_payloads_consistent: {diagnostics['all_embedded_payloads_consistent']}",
+        f"  metrics_present: {diagnostics['metrics_present']}",
+        f"  generated_file_count: {diagnostics['generated_file_count']}",
         "Paths:",
         f"  run_result: {paths['run_result_path']}",
         f"  backend_status: {paths['backend_status_path']}",
         f"  backend_metadata: {paths['backend_metadata_path']}",
         f"  run_dir: {paths['run_dir']}",
+        f"  results_dir: {paths['results_dir']}",
         f"  script: {paths['script_path']}",
         f"  metrics: {paths['metrics_path']}",
+        f"  stdout: {paths['stdout_path']}",
+        f"  stderr: {paths['stderr_path']}",
     ]
     if warnings:
         lines.append("Warnings:")

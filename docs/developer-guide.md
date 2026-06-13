@@ -112,6 +112,15 @@ It captures:
 
 `backend_status.json` and `backend_metadata.json` now also carry `schema_version`, and `fea_engine.artifacts` provides reusable validation helpers for artifact consumers.
 
+## Artifact Compatibility Policy
+
+Phase 4 defines a machine-readable compatibility boundary for persisted run artifacts.
+
+- `ARTIFACT_SCHEMA_VERSION` is the current writer version.
+- `MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION` and `MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION` define the accepted read range.
+- Inspection fails fast on unsupported schema versions instead of attempting a best-effort parse.
+- Inspection diagnostics also verify referenced file presence and consistency between `run_result.json` embedded payloads and the referenced backend artifact files.
+
 ## Repository Standards
 
 - Use `pytest -q` for local test runs after the editable install.

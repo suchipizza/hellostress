@@ -3,6 +3,8 @@
 from .artifacts import (
     ARTIFACT_SCHEMA_VERSION,
     ArtifactBundle,
+    MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
+    MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
     build_bundle_summary,
     load_artifact_bundle,
 )
@@ -43,6 +45,8 @@ __all__ = [
     "ArtifactBundle",
     "ArtifactValidationError",
     "BackendRuntimeMetadata",
+    "MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
+    "MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "build_bundle_summary",
     "ConfigurationError",
     "FEACopilotError",
