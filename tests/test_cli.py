@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import zipfile
 from pathlib import Path
 
 from fea_engine import (
@@ -185,3 +186,78 @@ def test_cli_inspection_returns_non_zero_for_unsupported_schema_version(tmp_path
     assert inspect_exit_code == 1
     assert inspect_stdout.getvalue() == ""
     assert "unsupported" in inspect_stderr.getvalue()
+
+
+def test_cli_can_export_run_bundle(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    initial_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=initial_stdout,
+        stderr=io.StringIO(),
+    )
+    run_payload = json.loads(initial_stdout.getvalue())
+    run_result_path = run_payload["artifacts"]["result_schema_path"]
+    archive_path = tmp_path / "export.zip"
+
+    export_stdout = io.StringIO()
+    export_exit_code = main(
+        ["--export-run-result", run_result_path, "--export-output", str(archive_path)],
+        stdout=export_stdout,
+        stderr=io.StringIO(),
+    )
+
+    assert export_exit_code == 0
+    assert archive_path.exists()
+    assert "Export: completed" in export_stdout.getvalue()
+    with zipfile.ZipFile(archive_path) as archive:
+        assert "run_result.json" in set(archive.namelist())
+
+
+def test_cli_can_cleanup_workspace_with_dry_run(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    first_stdout = io.StringIO()
+    second_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=first_stdout,
+        stderr=io.StringIO(),
+    )
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=second_stdout,
+        stderr=io.StringIO(),
+    )
+    first_payload = json.loads(first_stdout.getvalue())
+    old_run_dir = Path(first_payload["artifacts"]["run_dir"])
+    import os
+    from datetime import datetime, timedelta, timezone
+
+    old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp()
+    os.utime(old_run_dir / "run_result.json", (old_time, old_time))
+    os.utime(old_run_dir, (old_time, old_time))
+
+    cleanup_stdout = io.StringIO()
+    cleanup_exit_code = main(
+        [
+            "--cleanup-runs",
+            "--workspace",
+            str(settings.runs_workspace),
+            "--retention-days",
+            "7",
+            "--keep-latest",
+            "1",
+            "--dry-run",
+        ],
+        stdout=cleanup_stdout,
+        stderr=io.StringIO(),
+    )
+
+    output = cleanup_stdout.getvalue()
+    assert cleanup_exit_code == 0
+    assert "Cleanup: completed" in output
+    assert "Deleted runs: 1" in output
+    assert old_run_dir.exists() is True

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -10,12 +12,17 @@ from fea_engine import (
     MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
     ArtifactValidationError,
     build_bundle_summary,
+    cleanup_run_workspace,
+    export_artifact_bundle,
     load_artifact_bundle,
 )
 
 
 def write_bundle(tmp_path: Path) -> Path:
-    run_dir = tmp_path / "run"
+    return write_bundle_at_run_dir(tmp_path / "run")
+
+
+def write_bundle_at_run_dir(run_dir: Path) -> Path:
     results_dir = run_dir / "results"
     results_dir.mkdir(parents=True)
     metrics_path = results_dir / "metrics.json"
@@ -152,3 +159,61 @@ def test_build_bundle_summary_reports_inconsistent_embedded_payloads(tmp_path: P
 
     assert summary["diagnostics"]["all_embedded_payloads_consistent"] is False
     assert summary["diagnostics"]["consistency_checks"]["embedded_backend_status_matches_file"] is False
+
+
+def test_export_artifact_bundle_writes_zip_with_expected_files(tmp_path: Path) -> None:
+    run_result_path = write_bundle(tmp_path)
+    archive_path = export_artifact_bundle(run_result_path)
+
+    assert archive_path.exists()
+    with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+    assert "run_result.json" in names
+    assert "backend_status.json" in names
+    assert "backend_metadata.json" in names
+    assert "simulation.py" in names
+    assert "results/metrics.json" in names
+    assert "solver.stdout.log" in names
+    assert "solver.stderr.log" in names
+
+
+def test_cleanup_run_workspace_deletes_old_runs_and_keeps_latest(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    old_run = write_bundle_at_run_dir(workspace / "old-run")
+    recent_run = write_bundle_at_run_dir(workspace / "recent-run")
+    keep_run = write_bundle_at_run_dir(workspace / "keep-run")
+
+    old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp()
+    recent_time = (datetime.now(timezone.utc) - timedelta(days=5)).timestamp()
+    keep_time = datetime.now(timezone.utc).timestamp()
+    import os
+
+    for path, value in [(old_run, old_time), (recent_run, recent_time), (keep_run, keep_time)]:
+        run_dir = path.parent
+        os.utime(path, (value, value))
+        os.utime(run_dir, (value, value))
+
+    result = cleanup_run_workspace(workspace, retention_days=7, keep_latest=1, dry_run=False)
+
+    deleted_names = {path.name for path in result.deleted_runs}
+    retained_names = {path.name for path in result.retained_runs}
+    assert deleted_names == {"old-run"}
+    assert retained_names == {"recent-run", "keep-run"}
+    assert (workspace / "old-run").exists() is False
+    assert (workspace / "recent-run").exists() is True
+    assert (workspace / "keep-run").exists() is True
+
+
+def test_cleanup_run_workspace_dry_run_keeps_files(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    old_run = write_bundle_at_run_dir(workspace / "old-run")
+    old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp()
+    import os
+
+    os.utime(old_run, (old_time, old_time))
+    os.utime(old_run.parent, (old_time, old_time))
+
+    result = cleanup_run_workspace(workspace, retention_days=7, dry_run=True)
+
+    assert len(result.deleted_runs) == 1
+    assert old_run.parent.exists() is True

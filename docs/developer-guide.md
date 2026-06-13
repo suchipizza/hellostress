@@ -58,6 +58,13 @@ feacopilot --inspect-run-dir /path/to/run
 feacopilot --inspect-run-result /path/to/run/run_result.json --output json
 ```
 
+The CLI also supports operational workflows around the run workspace:
+
+```bash
+feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
+```
+
 ## Design Notes
 
 - The parser is intentionally narrow. Unsupported or ambiguous prompts should fail clearly.
@@ -120,6 +127,8 @@ Phase 4 defines a machine-readable compatibility boundary for persisted run arti
 - `MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION` and `MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION` define the accepted read range.
 - Inspection fails fast on unsupported schema versions instead of attempting a best-effort parse.
 - Inspection diagnostics also verify referenced file presence and consistency between `run_result.json` embedded payloads and the referenced backend artifact files.
+- Export first validates the bundle, then writes a zip archive rooted at the run directory.
+- Cleanup applies retention rules to direct child run directories in the configured workspace and supports `keep_latest` plus `dry_run`.
 
 ## Repository Standards
 

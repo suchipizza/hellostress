@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import shutil
+import zipfile
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .errors import ArtifactValidationError
+from .errors import ArtifactValidationError, ArtifactWorkflowError
 
 
 ARTIFACT_SCHEMA_VERSION = 1
@@ -60,6 +63,17 @@ class ArtifactBundle:
     run_result: dict[str, Any]
     backend_status: dict[str, Any]
     backend_metadata: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class RetentionCleanupResult:
+    workspace: Path
+    retention_days: int
+    keep_latest: int
+    dry_run: bool
+    deleted_runs: list[Path]
+    retained_runs: list[Path]
+    skipped_paths: list[Path]
 
 
 def load_artifact_bundle(run_result_path: Path) -> ArtifactBundle:
@@ -149,6 +163,79 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
     }
 
 
+def export_artifact_bundle(run_result_path: Path, output_path: Path | None = None) -> Path:
+    bundle = load_artifact_bundle(run_result_path)
+    run_dir = Path(bundle.run_result["artifacts"]["run_dir"]).resolve()
+    if output_path is None:
+        output_path = run_dir / f"{run_dir.name}-artifacts.zip"
+    output_path = output_path.expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    files_to_export = _bundle_files(bundle)
+    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in files_to_export:
+            archive.write(path, arcname=str(path.relative_to(run_dir)))
+    return output_path
+
+
+def cleanup_run_workspace(
+    workspace: Path,
+    *,
+    retention_days: int,
+    keep_latest: int = 0,
+    dry_run: bool = False,
+) -> RetentionCleanupResult:
+    if retention_days < 0:
+        raise ArtifactWorkflowError("retention_days must be >= 0.")
+    if keep_latest < 0:
+        raise ArtifactWorkflowError("keep_latest must be >= 0.")
+
+    workspace = workspace.expanduser().resolve()
+    if not workspace.exists():
+        return RetentionCleanupResult(
+            workspace=workspace,
+            retention_days=retention_days,
+            keep_latest=keep_latest,
+            dry_run=dry_run,
+            deleted_runs=[],
+            retained_runs=[],
+            skipped_paths=[],
+        )
+
+    run_dirs = _discover_run_dirs(workspace)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    sorted_runs = sorted(run_dirs, key=_run_sort_key, reverse=True)
+    protected_runs = set(sorted_runs[:keep_latest])
+    deleted_runs: list[Path] = []
+    retained_runs: list[Path] = []
+    skipped_paths: list[Path] = []
+
+    for run_dir in sorted_runs:
+        run_result_path = run_dir / "run_result.json"
+        if not run_result_path.exists():
+            skipped_paths.append(run_dir)
+            continue
+
+        run_time = datetime.fromtimestamp(run_result_path.stat().st_mtime, tz=timezone.utc)
+        should_delete = run_dir not in protected_runs and run_time < cutoff
+        if should_delete:
+            deleted_runs.append(run_dir)
+            if not dry_run:
+                shutil.rmtree(run_dir)
+        else:
+            retained_runs.append(run_dir)
+
+    return RetentionCleanupResult(
+        workspace=workspace,
+        retention_days=retention_days,
+        keep_latest=keep_latest,
+        dry_run=dry_run,
+        deleted_runs=deleted_runs,
+        retained_runs=retained_runs,
+        skipped_paths=skipped_paths,
+    )
+
+
 def _load_json(path: Path, *, artifact_name: str) -> dict[str, Any]:
     if not path.exists():
         raise ArtifactValidationError(f"{artifact_name} does not exist: {path}")
@@ -230,6 +317,49 @@ def _build_diagnostics(bundle: ArtifactBundle) -> dict[str, Any]:
     }
 
 
+def _bundle_files(bundle: ArtifactBundle) -> list[Path]:
+    run_result = bundle.run_result
+    artifacts = run_result["artifacts"]
+    run_dir = Path(artifacts["run_dir"]).resolve()
+    candidate_paths = [
+        bundle.run_result_path,
+        bundle.backend_status_path,
+        bundle.backend_metadata_path,
+        Path(artifacts["script_path"]),
+        Path(artifacts["metrics_path"]),
+        Path(run_result["run_metadata"]["stdout_path"]),
+        Path(run_result["run_metadata"]["stderr_path"]),
+        *[Path(path) for path in artifacts.get("generated_files", [])],
+    ]
+    files: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidate_paths:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not resolved.exists():
+            raise ArtifactWorkflowError(f"Cannot export artifact bundle because a referenced file is missing: {path}")
+        if run_dir not in resolved.parents and resolved != run_dir:
+            raise ArtifactWorkflowError(f"Refusing to export file outside the run directory: {path}")
+        if resolved.is_file():
+            files.append(resolved)
+    return files
+
+
+def _discover_run_dirs(workspace: Path) -> list[Path]:
+    if not workspace.exists():
+        return []
+    return sorted(path for path in workspace.iterdir() if path.is_dir())
+
+
+def _run_sort_key(run_dir: Path) -> float:
+    run_result_path = run_dir / "run_result.json"
+    if run_result_path.exists():
+        return run_result_path.stat().st_mtime
+    return run_dir.stat().st_mtime
+
+
 def _coerce_path(value: Any, field_name: str, run_result_path: Path) -> Path:
     if not isinstance(value, str) or not value:
         raise ArtifactValidationError(
@@ -249,7 +379,10 @@ __all__ = [
     "ArtifactBundle",
     "MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
+    "RetentionCleanupResult",
     "build_bundle_summary",
+    "cleanup_run_workspace",
+    "export_artifact_bundle",
     "load_artifact_bundle",
     "validate_backend_metadata_payload",
     "validate_backend_status_payload",

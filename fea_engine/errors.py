@@ -28,6 +28,10 @@ class ArtifactValidationError(FEACopilotError):
     """Raised when a persisted run artifact bundle is invalid."""
 
 
+class ArtifactWorkflowError(FEACopilotError):
+    """Raised when an artifact export or retention workflow cannot be completed."""
+
+
 class SolverExecutionError(FEACopilotError):
     """Raised when a supported solver backend fails to execute."""
 

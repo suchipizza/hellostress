@@ -26,6 +26,13 @@ To inspect a finished run:
 feacopilot --inspect-run-dir /path/to/run
 ```
 
+To export or clean up runs:
+
+```bash
+feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
+```
+
 ## Supported Prompt Patterns
 
 - Beam: `1 m long steel cantilever beam 0.1 m thick with a 150 N downward tip load`
@@ -43,6 +50,8 @@ feacopilot --inspect-run-dir /path/to/run
 - The CLI writes the same backend artifacts as the app, including `run_result.json`.
 - Run artifacts now include a `schema_version` field for contract validation.
 - The CLI inspection command now reports compatibility status, referenced file presence, and artifact consistency checks.
+- The CLI export command writes a validated zip archive of a completed run.
+- The CLI cleanup command applies retention rules to the run workspace and can preview deletions with `--dry-run`.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 
 ## Runtime Defaults

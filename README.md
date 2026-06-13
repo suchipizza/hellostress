@@ -77,6 +77,13 @@ feacopilot --inspect-run-dir /path/to/run
 feacopilot --inspect-run-result /path/to/run/run_result.json --output json
 ```
 
+You can export or clean up retained runs as well:
+
+```bash
+feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
+```
+
 ## Local Development
 
 Run the checks used in this repository:
@@ -126,6 +133,8 @@ The current compatibility policy is strict and explicit:
 - supported artifact bundles must declare a `schema_version` within the currently supported range
 - the CLI inspection path validates referenced files and checks that embedded payloads match the referenced backend artifact files
 - unsupported schema versions fail fast instead of being interpreted optimistically
+- the CLI export path writes a zip archive of the validated bundle for handoff or archival
+- the CLI cleanup path applies retention rules to the configured run workspace and supports dry-run previews
 
 ## Contributing
 
