@@ -23,7 +23,7 @@ The Phase 1 and Phase 2 work established a stricter parsing and backend contract
 - Golden template tests live in `tests/test_generator_golden.py`.
 - Run all tests with `pytest -q`.
 - The CLI coverage lives in `tests/test_cli.py`.
-- GitHub Actions also runs a CLI artifact workflow smoke path covering run creation, inspection, export, and cleanup.
+- GitHub Actions also runs a CLI artifact workflow smoke path covering run creation, inspection, workspace reporting, export, workspace bulk export, and cleanup.
 - The gated Docker integration smoke test lives in `tests/test_integration_docker_smoke.py` and should be run with `RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke`.
 
 ## Runtime Configuration
@@ -62,7 +62,9 @@ feacopilot --inspect-run-result /path/to/run/run_result.json --output json
 The CLI also supports operational workflows around the run workspace:
 
 ```bash
+feacopilot --report-workspace-policy --workspace /path/to/runs --retention-days 14 --keep-latest 5
 feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --export-workspace-runs --workspace /path/to/runs --export-output-dir ./workspace-exports
 feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
 ```
 
@@ -130,8 +132,10 @@ Phase 4 defines a machine-readable compatibility boundary for persisted run arti
 - Inspection diagnostics also verify referenced file presence and consistency between `run_result.json` embedded payloads and the referenced backend artifact files.
 - Inspection triage now classifies degraded bundles with machine-readable issue codes, severity, backend log context, and suggested operator actions.
 - Inspection policy now derives quality-gate, export, and promotion decisions from that triage surface so automation does not need to recreate policy client-side.
+- Workspace policy reporting reuses that same policy surface to emit per-run readiness plus aggregate counts across a run workspace.
 - Export first validates the bundle, then writes a zip archive rooted at the run directory.
 - Export now enforces the inspection quality gate by default and only allows degraded bundle export when an explicit override is requested.
+- Workspace bulk export now packages every export-ready run from a workspace into a chosen output directory and reports exported, blocked, skipped, and failed outcomes for automation.
 - Export archives now include `export-manifest.json` with per-file relative paths, sizes, and SHA-256 checksums for downstream verification.
 - Cleanup applies retention rules to direct child run directories in the configured workspace and supports `keep_latest` plus `dry_run`.
 - Cleanup JSON output now includes summary counts and run-name lists so automation can react without scraping text output.

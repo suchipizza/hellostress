@@ -2,7 +2,7 @@
 
 FEA Copilot is a narrow-scope structural simulation prototype that turns supported natural-language beam and plate prompts into structured specs, generated FEniCS scripts, quick estimates, and result summaries.
 
-Phase 2 closed out the backend hardening round. Phase 3 is complete, and Phase 4 has started on artifact-contract versioning and inspection for automation and operations.
+Phase 2 closed out the backend hardening round. Phase 3 and Phase 4 are now complete on `main`, including artifact inspection, workspace audit/reporting, policy-driven export, and retention workflows.
 
 ## Current Scope
 
@@ -77,10 +77,12 @@ feacopilot --inspect-run-dir /path/to/run
 feacopilot --inspect-run-result /path/to/run/run_result.json --output json
 ```
 
-You can export or clean up retained runs as well:
+You can audit, export, bulk export, or clean up retained runs as well:
 
 ```bash
+feacopilot --report-workspace-policy --retention-days 14 --keep-latest 5
 feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --export-workspace-runs --workspace /path/to/runs --export-output-dir ./workspace-exports
 feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
 ```
 
@@ -100,7 +102,7 @@ docker pull dolfinx/dolfinx:v0.7.3
 RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
 ```
 
-The main GitHub Actions test job also exercises the CLI artifact lifecycle in `mock` mode: run creation, inspection, export manifest validation, and cleanup retention behavior.
+The main GitHub Actions test job also exercises the CLI artifact lifecycle in `mock` mode: run creation, inspection, workspace reporting, single-run export, workspace bulk export, and cleanup retention behavior.
 
 ## Solver Backend Contract
 
@@ -137,7 +139,9 @@ The current compatibility policy is strict and explicit:
 - the CLI inspection path now also emits triage severity, issue codes, backend log context, and suggested actions for degraded bundles
 - inspection JSON now includes machine-readable quality-gate, export, and promotion policy decisions for automation
 - unsupported schema versions fail fast instead of being interpreted optimistically
+- workspace policy reporting exposes per-run readiness and aggregate counts across a run workspace
 - the CLI export path writes a zip archive of the validated bundle for handoff or archival, but now blocks by default when the quality gate fails unless an explicit override is supplied
+- the CLI workspace export path packages every export-ready run in a workspace into a chosen output directory and reports blocked, skipped, or failed runs explicitly
 - export archives now include `export-manifest.json` with per-file SHA-256 hashes and bundle metadata
 - the CLI cleanup path applies retention rules to the configured run workspace, supports dry-run previews, and exposes summary counts in JSON output
 
@@ -173,7 +177,7 @@ feacopilot/
 
 - Phase 2 is complete on `main`.
 - Phase 3 is complete on `main`.
-- Phase 4 is in progress with artifact-contract versioning and inspection work.
+- Phase 4 is complete on `main`.
 
 ## Disclaimer
 

@@ -14,9 +14,13 @@ from fea_engine import (
     MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
     ArtifactValidationError,
     ArtifactWorkflowError,
+    audit_run_workspace,
     build_bundle_summary,
     build_cleanup_summary,
+    build_workspace_export_summary,
+    build_workspace_policy_summary,
     cleanup_run_workspace,
+    export_run_workspace,
     export_artifact_bundle,
     load_artifact_bundle,
 )
@@ -132,6 +136,15 @@ def mutate_bundle_to_failed_backend(run_result_path: Path) -> None:
     run_result_payload["backend_status"] = "failed"
     run_result_payload["backend_status_details"] = backend_status_payload
     run_result_payload["backend_metadata"] = backend_metadata_payload
+    run_result_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
+
+
+def mutate_bundle_to_warning_only(run_result_path: Path) -> None:
+    run_result_payload = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result_payload["status"] = "completed_with_fallback"
+    run_result_payload["metrics_source"] = "fallback_estimate"
+    run_result_payload["fallback_used"] = True
+    run_result_payload["warnings"] = ["Fallback-derived metrics should be reviewed before promotion."]
     run_result_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
 
 
@@ -333,3 +346,111 @@ def test_cleanup_run_workspace_dry_run_keeps_files(tmp_path: Path) -> None:
     assert summary["summary"]["deleted_count"] == 1
     assert summary["summary"]["retained_count"] == 0
     assert summary["deleted_run_names"] == ["old-run"]
+
+
+def test_audit_run_workspace_reports_mixed_policy_states(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    clean_run = write_bundle_at_run_dir(workspace / "clean-run")
+    warning_run = write_bundle_at_run_dir(workspace / "warning-run")
+    blocked_run = write_bundle_at_run_dir(workspace / "blocked-run")
+    invalid_run = write_bundle_at_run_dir(workspace / "invalid-run")
+    (workspace / "skipped-dir").mkdir(parents=True)
+
+    mutate_bundle_to_warning_only(warning_run)
+    mutate_bundle_to_failed_backend(blocked_run)
+
+    invalid_payload = json.loads(invalid_run.read_text(encoding="utf-8"))
+    invalid_payload.pop("schema_version")
+    invalid_run.write_text(json.dumps(invalid_payload), encoding="utf-8")
+
+    old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp()
+    import os
+
+    os.utime(blocked_run, (old_time, old_time))
+    os.utime(blocked_run.parent, (old_time, old_time))
+
+    result = audit_run_workspace(workspace, retention_days=7, keep_latest=1)
+    summary = build_workspace_policy_summary(result)
+
+    assert summary["summary"]["discovered_count"] == 5
+    assert summary["summary"]["valid_run_count"] == 3
+    assert summary["summary"]["invalid_run_count"] == 1
+    assert summary["summary"]["skipped_path_count"] == 1
+    assert summary["summary"]["export_ready_count"] == 2
+    assert summary["summary"]["promotion_ready_count"] == 1
+    assert summary["summary"]["manual_review_count"] == 2
+    assert summary["summary"]["retention_candidate_count"] == 1
+    assert summary["invalid_run_names"] == ["invalid-run"]
+    assert summary["skipped_path_names"] == ["skipped-dir"]
+
+    runs_by_name = {record["run_name"]: record for record in summary["runs"]}
+    assert runs_by_name["clean-run"]["export_ready"] is True
+    assert runs_by_name["clean-run"]["promotion_ready"] is True
+    assert runs_by_name["clean-run"]["manual_review_required"] is False
+    assert runs_by_name["warning-run"]["export_ready"] is True
+    assert runs_by_name["warning-run"]["promotion_ready"] is False
+    assert runs_by_name["warning-run"]["manual_review_required"] is True
+    assert "fallback_used" in runs_by_name["warning-run"]["issue_codes"]
+    assert runs_by_name["blocked-run"]["export_ready"] is False
+    assert runs_by_name["blocked-run"]["manual_review_required"] is True
+    assert runs_by_name["blocked-run"]["retention_candidate"] is True
+    assert "backend_failed" in runs_by_name["blocked-run"]["issue_codes"]
+    assert runs_by_name["invalid-run"]["valid"] is False
+    assert "schema_version" in runs_by_name["invalid-run"]["invalid_reason"]
+
+
+def test_export_run_workspace_exports_ready_runs_and_reports_mixed_outcomes(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    output_dir = tmp_path / "exports"
+    clean_run = write_bundle_at_run_dir(workspace / "clean-run")
+    warning_run = write_bundle_at_run_dir(workspace / "warning-run")
+    blocked_run = write_bundle_at_run_dir(workspace / "blocked-run")
+    invalid_run = write_bundle_at_run_dir(workspace / "invalid-run")
+    broken_run = write_bundle_at_run_dir(workspace / "broken-run")
+    (workspace / "skipped-dir").mkdir(parents=True)
+
+    mutate_bundle_to_warning_only(warning_run)
+    mutate_bundle_to_failed_backend(blocked_run)
+
+    invalid_payload = json.loads(invalid_run.read_text(encoding="utf-8"))
+    invalid_payload.pop("schema_version")
+    invalid_run.write_text(json.dumps(invalid_payload), encoding="utf-8")
+
+    mutate_bundle_to_failed_backend(broken_run)
+    broken_payload = json.loads(broken_run.read_text(encoding="utf-8"))
+    Path(broken_payload["artifacts"]["metrics_path"]).unlink()
+
+    default_result = export_run_workspace(workspace, output_dir=output_dir, allow_degraded=False)
+    default_summary = build_workspace_export_summary(default_result)
+
+    assert default_summary["summary"]["discovered_count"] == 6
+    assert default_summary["summary"]["exported_count"] == 2
+    assert default_summary["summary"]["blocked_count"] == 3
+    assert default_summary["summary"]["skipped_count"] == 1
+    assert default_summary["summary"]["failed_count"] == 0
+    assert default_summary["summary"]["override_export_count"] == 0
+    assert (output_dir / "clean-run-artifacts.zip").exists() is True
+    assert (output_dir / "warning-run-artifacts.zip").exists() is True
+    assert default_summary["blocked_run_names"] == ["blocked-run", "broken-run", "invalid-run"]
+    assert default_summary["skipped_path_names"] == ["skipped-dir"]
+
+    override_output_dir = tmp_path / "override-exports"
+    override_result = export_run_workspace(workspace, output_dir=override_output_dir, allow_degraded=True)
+    override_summary = build_workspace_export_summary(override_result)
+
+    assert override_summary["summary"]["discovered_count"] == 6
+    assert override_summary["summary"]["exported_count"] == 3
+    assert override_summary["summary"]["blocked_count"] == 1
+    assert override_summary["summary"]["skipped_count"] == 1
+    assert override_summary["summary"]["failed_count"] == 1
+    assert override_summary["summary"]["override_export_count"] == 1
+    assert (override_output_dir / "blocked-run-artifacts.zip").exists() is True
+    assert (override_output_dir / "broken-run-artifacts.zip").exists() is False
+    assert override_summary["blocked_run_names"] == ["invalid-run"]
+    assert override_summary["failed_run_names"] == ["broken-run"]
+
+    runs_by_name = {record["run_name"]: record for record in override_summary["runs"]}
+    assert runs_by_name["blocked-run"]["outcome"] == "exported"
+    assert runs_by_name["blocked-run"]["policy_override_used"] is True
+    assert runs_by_name["broken-run"]["outcome"] == "failed"
+    assert "missing" in runs_by_name["broken-run"]["reason"].lower()

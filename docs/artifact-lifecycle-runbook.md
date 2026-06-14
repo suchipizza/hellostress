@@ -5,7 +5,9 @@
 This runbook covers the supported operational lifecycle for completed run artifacts:
 
 - inspect a completed run before consuming it
+- audit a workspace to understand which runs are export-ready or need review
 - export a validated bundle for handoff or retention
+- bulk export policy-approved runs from a workspace
 - clean up old runs from a local workspace with predictable retention rules
 
 The goal is to keep the artifact contract machine-friendly without widening simulation scope.
@@ -54,6 +56,29 @@ If inspection succeeds but reports triage issues, treat the bundle as readable b
 - routing timed-out or failed runs to backend troubleshooting
 - flagging fallback-derived metrics for manual review
 
+## Workspace Audit Workflow
+
+Use the workspace report when you need a read-only view of run readiness across a local workspace:
+
+```bash
+feacopilot \
+  --report-workspace-policy \
+  --workspace /path/to/runs \
+  --retention-days 14 \
+  --keep-latest 5 \
+  --output json
+```
+
+The report evaluates each direct child run directory against the same inspection-derived policy surface used for single-run decisions.
+
+Report JSON is intended for automation and includes:
+
+- per-run readiness fields such as `export_ready`, `promotion_ready`, `manual_review_required`, and `retention_candidate`
+- aggregate counts such as `export_ready_count`, `promotion_ready_count`, `manual_review_count`, `retention_candidate_count`, `invalid_run_count`, and `skipped_path_count`
+- invalid-run and skipped-path naming so scripts do not need to scrape text output
+
+Use the text output for a compact operator summary and a short list of flagged runs.
+
 ## Export Workflow
 
 Export only after a run passes inspection:
@@ -87,6 +112,44 @@ The export archive includes `export-manifest.json`, which records:
 - total file count
 
 Use the returned `archive_sha256` for archive-level integrity checks in downstream storage or transfer workflows.
+
+## Workspace Bulk Export Workflow
+
+Use workspace export after reviewing the audit output when you want to package every export-ready run into a single destination directory:
+
+```bash
+feacopilot \
+  --export-workspace-runs \
+  --workspace /path/to/runs \
+  --export-output-dir ./workspace-exports \
+  --output json
+```
+
+Default behavior:
+
+- exports valid runs whose export policy passes
+- blocks invalid runs and policy-blocked degraded runs
+- skips direct child paths that are not run directories
+- reports per-run outcomes as `exported`, `blocked`, `skipped`, or `failed`
+
+If you intentionally want degraded-but-readable bundles included, use the same explicit override as single-run export:
+
+```bash
+feacopilot \
+  --export-workspace-runs \
+  --workspace /path/to/runs \
+  --export-output-dir ./workspace-exports \
+  --allow-degraded-export \
+  --output json
+```
+
+Use the override sparingly. It allows export attempts for policy-blocked but still readable bundles; invalid or incomplete bundles can still fail during archive creation and will be reported as `failed`.
+
+The bulk export JSON payload includes:
+
+- aggregate counts for exported, blocked, skipped, failed, and override-driven exports
+- per-run archive paths and archive SHA-256 values for successful exports
+- per-run reasons and issue codes for blocked or failed runs
 
 ## Cleanup Workflow
 
@@ -122,7 +185,9 @@ GitHub Actions covers the artifact lifecycle on every change to `main` and on pu
 
 - prompt execution in `mock` mode
 - inspection of the emitted `run_result.json`
+- workspace policy reporting on the generated run workspace
 - export archive creation plus manifest validation
+- workspace bulk export into an output directory
 - cleanup dry-run verification
 - cleanup deletion verification
 

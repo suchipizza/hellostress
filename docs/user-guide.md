@@ -26,10 +26,12 @@ To inspect a finished run:
 feacopilot --inspect-run-dir /path/to/run
 ```
 
-To export or clean up runs:
+To audit, export, or clean up runs:
 
 ```bash
+feacopilot --report-workspace-policy --workspace /path/to/runs --retention-days 14 --keep-latest 5
 feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --export-workspace-runs --workspace /path/to/runs --export-output-dir ./workspace-exports
 feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
 ```
 
@@ -53,7 +55,9 @@ For operational details around inspection, export manifests, retention, and auto
 - Run artifacts now include a `schema_version` field for contract validation.
 - The CLI inspection command now reports compatibility status, referenced file presence, artifact consistency checks, and triage guidance for degraded runs.
 - The CLI inspection JSON output now includes machine-readable quality-gate, export, and promotion decisions.
+- The CLI workspace policy report exposes per-run export readiness, promotion readiness, manual review requirement, and retention candidacy across a workspace.
 - The CLI export command writes a validated zip archive of a completed run and includes `export-manifest.json` with file checksums, but blocks by default when the quality gate fails unless `--allow-degraded-export` is provided.
+- The CLI workspace bulk export command packages all export-ready runs from a workspace into a chosen output directory and reports exported, blocked, skipped, and failed outcomes in JSON mode.
 - The CLI cleanup command applies retention rules to the run workspace, can preview deletions with `--dry-run`, and returns summary counts in JSON mode.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 

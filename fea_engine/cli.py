@@ -9,9 +9,13 @@ from typing import Callable, Optional, Sequence, TextIO
 from dotenv import load_dotenv
 
 from .artifacts import (
+    audit_run_workspace,
     build_bundle_summary,
     build_cleanup_summary,
+    build_workspace_export_summary,
+    build_workspace_policy_summary,
     cleanup_run_workspace,
+    export_run_workspace,
     export_artifact_bundle,
     load_artifact_bundle,
 )
@@ -62,6 +66,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output zip path for artifact export workflows.",
     )
     parser.add_argument(
+        "--export-workspace-runs",
+        action="store_true",
+        help="Export all workspace runs that pass export policy into an output directory.",
+    )
+    parser.add_argument(
+        "--export-output-dir",
+        type=Path,
+        help="Output directory for workspace bulk export archives.",
+    )
+    parser.add_argument(
         "--allow-degraded-export",
         action="store_true",
         help="Override export policy and package a bundle even when the inspection quality gate fails.",
@@ -72,9 +86,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Clean old run directories from the configured workspace.",
     )
     parser.add_argument(
+        "--report-workspace-policy",
+        action="store_true",
+        help="Audit run directories in a workspace and report policy readiness without modifying anything.",
+    )
+    parser.add_argument(
         "--workspace",
         type=Path,
-        help="Workspace directory override for cleanup workflows. Defaults to FEA_RUNS_DIR or the runtime default.",
+        help="Workspace directory override for workspace audit and cleanup workflows. Defaults to FEA_RUNS_DIR or the runtime default.",
     )
     parser.add_argument(
         "--retention-days",
@@ -137,6 +156,13 @@ def main(
                 args.export_output,
                 allow_degraded_export=args.allow_degraded_export,
             )
+        elif args.export_workspace_runs:
+            settings = settings_loader() if settings_loader is not None else RuntimeSettings.from_env()
+            payload = export_workspace_to_payload(
+                workspace=args.workspace or settings.runs_workspace,
+                output_dir=args.export_output_dir,
+                allow_degraded_export=args.allow_degraded_export,
+            )
         elif args.cleanup_runs:
             settings = settings_loader() if settings_loader is not None else RuntimeSettings.from_env()
             payload = cleanup_to_payload(
@@ -144,6 +170,13 @@ def main(
                 retention_days=args.retention_days,
                 keep_latest=args.keep_latest,
                 dry_run=args.dry_run,
+            )
+        elif args.report_workspace_policy:
+            settings = settings_loader() if settings_loader is not None else RuntimeSettings.from_env()
+            payload = workspace_policy_to_payload(
+                workspace=args.workspace or settings.runs_workspace,
+                retention_days=args.retention_days,
+                keep_latest=args.keep_latest,
             )
         else:
             prompt = _read_prompt(args.prompt, args.prompt_file)
@@ -164,8 +197,12 @@ def main(
         output.write("\n")
     elif payload.get("export_mode"):
         output.write(render_export_summary(payload))
+    elif payload.get("workspace_export_mode"):
+        output.write(render_workspace_export_summary(payload))
     elif payload.get("cleanup_mode"):
         output.write(render_cleanup_summary(payload))
+    elif payload.get("workspace_policy_mode"):
+        output.write(render_workspace_policy_summary(payload))
     elif payload.get("inspection_mode"):
         output.write(render_inspection_summary(payload))
     else:
@@ -177,28 +214,54 @@ def _validate_mode_args(parser: argparse.ArgumentParser, args: argparse.Namespac
     run_inputs = [bool(args.prompt), bool(args.prompt_file)]
     inspect_inputs = [bool(args.inspect_run_result), bool(args.inspect_run_dir)]
     export_inputs = [bool(args.export_run_result), bool(args.export_run_dir)]
+    workspace_export_inputs = [bool(args.export_workspace_runs)]
     cleanup_inputs = [bool(args.cleanup_runs)]
-    selected_inputs = sum(run_inputs) + sum(inspect_inputs) + sum(export_inputs) + sum(cleanup_inputs)
+    report_inputs = [bool(args.report_workspace_policy)]
+    workspace_mode_selected = any(cleanup_inputs) or any(report_inputs) or any(workspace_export_inputs)
+    selected_inputs = (
+        sum(run_inputs)
+        + sum(inspect_inputs)
+        + sum(export_inputs)
+        + sum(workspace_export_inputs)
+        + sum(cleanup_inputs)
+        + sum(report_inputs)
+    )
     if selected_inputs != 1:
         parser.error(
-            "Provide exactly one primary workflow: prompt execution, inspection, export, or cleanup."
+            "Provide exactly one primary workflow: prompt execution, inspection, export, workspace export, workspace audit, or cleanup."
         )
-    if any(inspect_inputs) or any(export_inputs) or any(cleanup_inputs):
+    if any(inspect_inputs) or any(export_inputs) or workspace_mode_selected:
         if args.mesh_density is not None or args.solver_mode is not None:
             parser.error("--mesh-density and --solver-mode are only valid for prompt execution.")
     if any(export_inputs) and args.cleanup_runs:
         parser.error("Export and cleanup workflows cannot be combined.")
+    if any(export_inputs) and args.report_workspace_policy:
+        parser.error("Export and workspace audit workflows cannot be combined.")
+    if any(export_inputs) and args.export_workspace_runs:
+        parser.error("Single-run export and workspace export workflows cannot be combined.")
     if any(export_inputs) and sum(export_inputs) != 1:
         parser.error("Provide exactly one of --export-run-result or --export-run-dir.")
     if any(inspect_inputs) and sum(inspect_inputs) != 1:
         parser.error("Provide exactly one of --inspect-run-result or --inspect-run-dir.")
     if args.cleanup_runs and args.retention_days is None:
         parser.error("--retention-days is required with --cleanup-runs.")
-    if not args.cleanup_runs and (args.retention_days is not None or args.keep_latest != 0 or args.dry_run or args.workspace):
-        parser.error("--retention-days, --keep-latest, --dry-run, and --workspace are only valid with --cleanup-runs.")
+    if args.report_workspace_policy and args.retention_days is None:
+        parser.error("--retention-days is required with --report-workspace-policy.")
+    if args.export_workspace_runs and args.export_output_dir is None:
+        parser.error("--export-output-dir is required with --export-workspace-runs.")
+    if not workspace_mode_selected and (args.retention_days is not None or args.keep_latest != 0 or args.workspace):
+        parser.error("--retention-days, --keep-latest, and --workspace are only valid with workspace audit or cleanup.")
+    if args.export_workspace_runs and args.retention_days is not None:
+        parser.error("--retention-days is not used with --export-workspace-runs.")
+    if args.export_workspace_runs and args.keep_latest != 0:
+        parser.error("--keep-latest is not used with --export-workspace-runs.")
+    if not args.cleanup_runs and args.dry_run:
+        parser.error("--dry-run is only valid with --cleanup-runs.")
     if not any(export_inputs) and args.export_output is not None:
         parser.error("--export-output is only valid with export workflows.")
-    if not any(export_inputs) and args.allow_degraded_export:
+    if not args.export_workspace_runs and args.export_output_dir is not None:
+        parser.error("--export-output-dir is only valid with --export-workspace-runs.")
+    if not (any(export_inputs) or args.export_workspace_runs) and args.allow_degraded_export:
         parser.error("--allow-degraded-export is only valid with export workflows.")
 
 
@@ -299,6 +362,46 @@ def cleanup_to_payload(
         "cleanup_mode": True,
     }
     payload.update(build_cleanup_summary(result))
+    return payload
+
+
+def export_workspace_to_payload(
+    *,
+    workspace: Path,
+    output_dir: Optional[Path],
+    allow_degraded_export: bool,
+) -> dict[str, object]:
+    if output_dir is None:
+        raise AssertionError("Workspace export validation should happen in argparse.")
+    result = export_run_workspace(
+        workspace,
+        output_dir=output_dir,
+        allow_degraded=allow_degraded_export,
+    )
+    payload = {
+        "workspace_export_mode": True,
+    }
+    payload.update(build_workspace_export_summary(result))
+    return payload
+
+
+def workspace_policy_to_payload(
+    *,
+    workspace: Path,
+    retention_days: Optional[int],
+    keep_latest: int,
+) -> dict[str, object]:
+    if retention_days is None:
+        raise AssertionError("Workspace policy validation should happen in argparse.")
+    result = audit_run_workspace(
+        workspace,
+        retention_days=retention_days,
+        keep_latest=keep_latest,
+    )
+    payload = {
+        "workspace_policy_mode": True,
+    }
+    payload.update(build_workspace_policy_summary(result))
     return payload
 
 
@@ -428,6 +531,84 @@ def render_cleanup_summary(payload: dict[str, object]) -> str:
         f"Retained runs: {summary['retained_count']}",
         f"Skipped paths: {summary['skipped_count']}",
     ]
+    return "\n".join(lines) + "\n"
+
+
+def render_workspace_export_summary(payload: dict[str, object]) -> str:
+    summary = payload["summary"]
+    exported_lines = [
+        f"  - {record['run_name']}: {record['archive_path']}"
+        + (" override-used" if record["policy_override_used"] else "")
+        for record in payload["runs"]
+        if record["outcome"] == "exported"
+    ]
+    blocked_lines = [
+        f"  - {record['run_name']}: {record['reason']}"
+        for record in payload["runs"]
+        if record["outcome"] in {"blocked", "failed"}
+    ]
+    lines = [
+        "Workspace export: completed",
+        f"Workspace: {payload['workspace']}",
+        f"Output dir: {payload['output_dir']}",
+        f"Allow degraded export: {payload['allow_degraded_export']}",
+        f"Discovered paths: {summary['discovered_count']}",
+        f"Exported runs: {summary['exported_count']}",
+        f"Blocked runs: {summary['blocked_count']}",
+        f"Skipped paths: {summary['skipped_count']}",
+        f"Failed runs: {summary['failed_count']}",
+        f"Override exports: {summary['override_export_count']}",
+    ]
+    if exported_lines:
+        lines.append("Exported archives:")
+        lines.extend(exported_lines)
+    else:
+        lines.append("Exported archives: none")
+    if blocked_lines:
+        lines.append("Blocked or failed:")
+        lines.extend(blocked_lines)
+    if payload["skipped_path_names"]:
+        lines.append(f"Skipped path names: {', '.join(payload['skipped_path_names'])}")
+    return "\n".join(lines) + "\n"
+
+
+def render_workspace_policy_summary(payload: dict[str, object]) -> str:
+    summary = payload["summary"]
+    flagged_lines: list[str] = []
+    for record in payload["runs"]:
+        reasons: list[str] = []
+        if not record["valid"]:
+            reasons.append("invalid")
+        elif record["manual_review_required"]:
+            reasons.append(f"manual-review:{record['triage_severity']}")
+        if record["retention_candidate"]:
+            reasons.append("retention-candidate")
+        if reasons:
+            issue_codes = ",".join(record["issue_codes"])
+            detail = f" issue_codes={issue_codes}" if issue_codes else ""
+            flagged_lines.append(f"  - {record['run_name']}: {', '.join(reasons)}{detail}")
+
+    lines = [
+        "Workspace policy report: completed",
+        f"Workspace: {payload['workspace']}",
+        f"Retention days: {payload['retention_days']}",
+        f"Keep latest: {payload['keep_latest']}",
+        f"Discovered paths: {summary['discovered_count']}",
+        f"Valid runs: {summary['valid_run_count']}",
+        f"Invalid runs: {summary['invalid_run_count']}",
+        f"Skipped paths: {summary['skipped_path_count']}",
+        f"Export ready: {summary['export_ready_count']}",
+        f"Promotion ready: {summary['promotion_ready_count']}",
+        f"Manual review required: {summary['manual_review_count']}",
+        f"Retention candidates: {summary['retention_candidate_count']}",
+    ]
+    if flagged_lines:
+        lines.append("Flagged runs:")
+        lines.extend(flagged_lines)
+    else:
+        lines.append("Flagged runs: none")
+    if payload["skipped_path_names"]:
+        lines.append(f"Skipped path names: {', '.join(payload['skipped_path_names'])}")
     return "\n".join(lines) + "\n"
 
 

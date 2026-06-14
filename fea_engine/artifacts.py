@@ -89,6 +89,59 @@ class ArtifactExportResult:
     policy_override_used: bool
 
 
+@dataclass(frozen=True)
+class WorkspacePolicyRunRecord:
+    run_dir: Path
+    run_result_path: Path
+    valid: bool
+    status: str | None
+    backend_mode: str | None
+    backend_status: str | None
+    metrics_source: str | None
+    fallback_used: bool | None
+    triage_severity: str | None
+    quality_gate_passed: bool
+    export_ready: bool
+    promotion_ready: bool
+    manual_review_required: bool
+    retention_candidate: bool
+    issue_codes: tuple[str, ...]
+    invalid_reason: str | None
+
+
+@dataclass(frozen=True)
+class WorkspacePolicyReportResult:
+    workspace: Path
+    retention_days: int
+    keep_latest: int
+    generated_at: datetime
+    runs: list[WorkspacePolicyRunRecord]
+    skipped_paths: list[Path]
+
+
+@dataclass(frozen=True)
+class WorkspaceExportRunResult:
+    run_dir: Path
+    run_result_path: Path | None
+    outcome: str
+    valid: bool
+    export_ready: bool
+    policy_override_used: bool
+    issue_codes: tuple[str, ...]
+    archive_path: Path | None
+    archive_sha256: str | None
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class WorkspaceExportResult:
+    workspace: Path
+    output_dir: Path
+    generated_at: datetime
+    allow_degraded: bool
+    runs: list[WorkspaceExportRunResult]
+
+
 def load_artifact_bundle(run_result_path: Path) -> ArtifactBundle:
     run_result_payload = _load_json(run_result_path, artifact_name="run_result.json")
     validate_run_result_payload(run_result_payload, path=run_result_path)
@@ -294,6 +347,252 @@ def build_cleanup_summary(result: RetentionCleanupResult) -> dict[str, Any]:
         "deleted_run_names": [path.name for path in result.deleted_runs],
         "retained_run_names": [path.name for path in result.retained_runs],
         "skipped_path_names": [path.name for path in result.skipped_paths],
+    }
+
+
+def export_run_workspace(
+    workspace: Path,
+    *,
+    output_dir: Path,
+    allow_degraded: bool = False,
+) -> WorkspaceExportResult:
+    workspace = workspace.expanduser().resolve()
+    output_dir = output_dir.expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated_at = datetime.now(timezone.utc)
+
+    records, skipped_paths = _scan_workspace_run_records(workspace, retention_days=None, keep_latest=0)
+    results: list[WorkspaceExportRunResult] = []
+
+    for skipped_path in skipped_paths:
+        results.append(
+            WorkspaceExportRunResult(
+                run_dir=skipped_path,
+                run_result_path=None,
+                outcome="skipped",
+                valid=False,
+                export_ready=False,
+                policy_override_used=False,
+                issue_codes=(),
+                archive_path=None,
+                archive_sha256=None,
+                reason="Path does not contain run_result.json.",
+            )
+        )
+
+    for record in records:
+        if not record.valid:
+            results.append(
+                WorkspaceExportRunResult(
+                    run_dir=record.run_dir,
+                    run_result_path=record.run_result_path,
+                    outcome="blocked",
+                    valid=False,
+                    export_ready=False,
+                    policy_override_used=False,
+                    issue_codes=record.issue_codes,
+                    archive_path=None,
+                    archive_sha256=None,
+                    reason=record.invalid_reason,
+                )
+            )
+            continue
+
+        if not record.export_ready and not allow_degraded:
+            results.append(
+                WorkspaceExportRunResult(
+                    run_dir=record.run_dir,
+                    run_result_path=record.run_result_path,
+                    outcome="blocked",
+                    valid=True,
+                    export_ready=False,
+                    policy_override_used=False,
+                    issue_codes=record.issue_codes,
+                    archive_path=None,
+                    archive_sha256=None,
+                    reason="Export policy blocked this run; rerun with --allow-degraded-export to override.",
+                )
+            )
+            continue
+
+        archive_path = output_dir / f"{record.run_dir.name}-artifacts.zip"
+        try:
+            export_result = export_artifact_bundle(
+                record.run_result_path,
+                output_path=archive_path,
+                allow_degraded=allow_degraded,
+            )
+        except (ArtifactWorkflowError, OSError) as exc:
+            results.append(
+                WorkspaceExportRunResult(
+                    run_dir=record.run_dir,
+                    run_result_path=record.run_result_path,
+                    outcome="failed",
+                    valid=True,
+                    export_ready=record.export_ready,
+                    policy_override_used=False,
+                    issue_codes=record.issue_codes,
+                    archive_path=None,
+                    archive_sha256=None,
+                    reason=str(exc),
+                )
+            )
+            continue
+
+        results.append(
+            WorkspaceExportRunResult(
+                run_dir=record.run_dir,
+                run_result_path=record.run_result_path,
+                outcome="exported",
+                valid=True,
+                export_ready=record.export_ready,
+                policy_override_used=export_result.policy_override_used,
+                issue_codes=record.issue_codes,
+                archive_path=export_result.archive_path,
+                archive_sha256=export_result.archive_sha256,
+                reason=None,
+            )
+        )
+
+    return WorkspaceExportResult(
+        workspace=workspace,
+        output_dir=output_dir,
+        generated_at=generated_at,
+        allow_degraded=allow_degraded,
+        runs=sorted(results, key=lambda item: item.run_dir.name),
+    )
+
+
+def audit_run_workspace(
+    workspace: Path,
+    *,
+    retention_days: int,
+    keep_latest: int = 0,
+) -> WorkspacePolicyReportResult:
+    if retention_days < 0:
+        raise ArtifactWorkflowError("retention_days must be >= 0.")
+    if keep_latest < 0:
+        raise ArtifactWorkflowError("keep_latest must be >= 0.")
+
+    workspace = workspace.expanduser().resolve()
+    generated_at = datetime.now(timezone.utc)
+    records, skipped_paths = _scan_workspace_run_records(
+        workspace,
+        retention_days=retention_days,
+        keep_latest=keep_latest,
+        generated_at=generated_at,
+    )
+
+    return WorkspacePolicyReportResult(
+        workspace=workspace,
+        retention_days=retention_days,
+        keep_latest=keep_latest,
+        generated_at=generated_at,
+        runs=records,
+        skipped_paths=skipped_paths,
+    )
+
+
+def build_workspace_policy_summary(result: WorkspacePolicyReportResult) -> dict[str, Any]:
+    runs_payload: list[dict[str, Any]] = []
+    for record in result.runs:
+        runs_payload.append(
+            {
+                "run_name": record.run_dir.name,
+                "run_dir": str(record.run_dir),
+                "run_result_path": str(record.run_result_path),
+                "valid": record.valid,
+                "status": record.status,
+                "backend_mode": record.backend_mode,
+                "backend_status": record.backend_status,
+                "metrics_source": record.metrics_source,
+                "fallback_used": record.fallback_used,
+                "triage_severity": record.triage_severity,
+                "quality_gate_passed": record.quality_gate_passed,
+                "export_ready": record.export_ready,
+                "promotion_ready": record.promotion_ready,
+                "manual_review_required": record.manual_review_required,
+                "retention_candidate": record.retention_candidate,
+                "issue_codes": list(record.issue_codes),
+                "invalid_reason": record.invalid_reason,
+            }
+        )
+
+    summary = {
+        "discovered_count": len(result.runs) + len(result.skipped_paths),
+        "valid_run_count": sum(1 for record in result.runs if record.valid),
+        "invalid_run_count": sum(1 for record in result.runs if not record.valid),
+        "skipped_path_count": len(result.skipped_paths),
+        "export_ready_count": sum(1 for record in result.runs if record.export_ready),
+        "promotion_ready_count": sum(1 for record in result.runs if record.promotion_ready),
+        "manual_review_count": sum(1 for record in result.runs if record.manual_review_required),
+        "retention_candidate_count": sum(1 for record in result.runs if record.retention_candidate),
+    }
+    flagged_run_names = [
+        record.run_dir.name
+        for record in result.runs
+        if (not record.valid) or record.manual_review_required or record.retention_candidate
+    ]
+    invalid_run_names = [record.run_dir.name for record in result.runs if not record.valid]
+    return {
+        "workspace": str(result.workspace),
+        "retention_days": result.retention_days,
+        "keep_latest": result.keep_latest,
+        "generated_at": result.generated_at.isoformat(),
+        "summary": summary,
+        "runs": runs_payload,
+        "flagged_run_names": flagged_run_names,
+        "invalid_run_names": invalid_run_names,
+        "skipped_paths": [str(path) for path in result.skipped_paths],
+        "skipped_path_names": [path.name for path in result.skipped_paths],
+    }
+
+
+def build_workspace_export_summary(result: WorkspaceExportResult) -> dict[str, Any]:
+    summary = {
+        "discovered_count": len(result.runs),
+        "exported_count": sum(1 for record in result.runs if record.outcome == "exported"),
+        "blocked_count": sum(1 for record in result.runs if record.outcome == "blocked"),
+        "skipped_count": sum(1 for record in result.runs if record.outcome == "skipped"),
+        "failed_count": sum(1 for record in result.runs if record.outcome == "failed"),
+        "override_export_count": sum(1 for record in result.runs if record.policy_override_used),
+    }
+    exported_archives = [
+        {
+            "run_name": record.run_dir.name,
+            "archive_path": str(record.archive_path),
+            "archive_sha256": record.archive_sha256,
+            "policy_override_used": record.policy_override_used,
+        }
+        for record in result.runs
+        if record.archive_path is not None
+    ]
+    return {
+        "workspace": str(result.workspace),
+        "output_dir": str(result.output_dir),
+        "generated_at": result.generated_at.isoformat(),
+        "allow_degraded_export": result.allow_degraded,
+        "summary": summary,
+        "runs": [
+            {
+                "run_name": record.run_dir.name,
+                "run_dir": str(record.run_dir),
+                "run_result_path": str(record.run_result_path) if record.run_result_path is not None else None,
+                "outcome": record.outcome,
+                "valid": record.valid,
+                "export_ready": record.export_ready,
+                "policy_override_used": record.policy_override_used,
+                "issue_codes": list(record.issue_codes),
+                "archive_path": str(record.archive_path) if record.archive_path is not None else None,
+                "archive_sha256": record.archive_sha256,
+                "reason": record.reason,
+            }
+            for record in result.runs
+        ],
+        "exported_archives": exported_archives,
+        "blocked_run_names": [record.run_dir.name for record in result.runs if record.outcome == "blocked"],
+        "skipped_path_names": [record.run_dir.name for record in result.runs if record.outcome == "skipped"],
+        "failed_run_names": [record.run_dir.name for record in result.runs if record.outcome == "failed"],
     }
 
 
@@ -675,6 +974,85 @@ def _discover_run_dirs(workspace: Path) -> list[Path]:
     return sorted(path for path in workspace.iterdir() if path.is_dir())
 
 
+def _scan_workspace_run_records(
+    workspace: Path,
+    *,
+    retention_days: int | None,
+    keep_latest: int,
+    generated_at: datetime | None = None,
+) -> tuple[list[WorkspacePolicyRunRecord], list[Path]]:
+    if generated_at is None:
+        generated_at = datetime.now(timezone.utc)
+    if not workspace.exists():
+        return [], []
+
+    run_dirs = _discover_run_dirs(workspace)
+    sorted_runs = sorted(run_dirs, key=_run_sort_key, reverse=True)
+    protected_runs = set(sorted_runs[:keep_latest])
+    cutoff = generated_at - timedelta(days=retention_days) if retention_days is not None else None
+    records: list[WorkspacePolicyRunRecord] = []
+    skipped_paths: list[Path] = []
+
+    for run_dir in sorted_runs:
+        run_result_path = run_dir / "run_result.json"
+        if not run_result_path.exists():
+            skipped_paths.append(run_dir)
+            continue
+
+        run_time = datetime.fromtimestamp(run_result_path.stat().st_mtime, tz=timezone.utc)
+        retention_candidate = bool(
+            cutoff is not None and run_dir not in protected_runs and run_time < cutoff
+        )
+        try:
+            bundle = load_artifact_bundle(run_result_path)
+            summary = build_bundle_summary(bundle)
+        except ArtifactValidationError as exc:
+            records.append(
+                WorkspacePolicyRunRecord(
+                    run_dir=run_dir,
+                    run_result_path=run_result_path,
+                    valid=False,
+                    status=None,
+                    backend_mode=None,
+                    backend_status=None,
+                    metrics_source=None,
+                    fallback_used=None,
+                    triage_severity=None,
+                    quality_gate_passed=False,
+                    export_ready=False,
+                    promotion_ready=False,
+                    manual_review_required=False,
+                    retention_candidate=retention_candidate,
+                    issue_codes=(),
+                    invalid_reason=str(exc),
+                )
+            )
+            continue
+
+        records.append(
+            WorkspacePolicyRunRecord(
+                run_dir=run_dir,
+                run_result_path=run_result_path,
+                valid=True,
+                status=summary["status"],
+                backend_mode=summary["backend_mode"],
+                backend_status=summary["backend_status"],
+                metrics_source=summary["metrics_source"],
+                fallback_used=summary["fallback_used"],
+                triage_severity=summary["triage"]["severity"],
+                quality_gate_passed=summary["policy"]["quality_gate"]["passed"],
+                export_ready=summary["policy"]["export"]["allowed"],
+                promotion_ready=summary["policy"]["promotion"]["allowed"],
+                manual_review_required=summary["policy"]["promotion"]["requires_review"],
+                retention_candidate=retention_candidate,
+                issue_codes=tuple(issue["code"] for issue in summary["triage"]["issues"]),
+                invalid_reason=None,
+            )
+        )
+
+    return records, skipped_paths
+
+
 def _run_sort_key(run_dir: Path) -> float:
     run_result_path = run_dir / "run_result.json"
     if run_result_path.exists():
@@ -716,9 +1094,17 @@ __all__ = [
     "MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "MIN_SUPPORTED_ARTIFACT_SCHEMA_VERSION",
     "RetentionCleanupResult",
+    "WorkspaceExportResult",
+    "WorkspaceExportRunResult",
+    "WorkspacePolicyReportResult",
+    "WorkspacePolicyRunRecord",
+    "audit_run_workspace",
     "build_bundle_summary",
     "build_cleanup_summary",
+    "build_workspace_export_summary",
+    "build_workspace_policy_summary",
     "cleanup_run_workspace",
+    "export_run_workspace",
     "export_artifact_bundle",
     "load_artifact_bundle",
     "validate_backend_metadata_payload",

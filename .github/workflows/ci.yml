@@ -48,6 +48,10 @@ jobs:
             --solver-mode mock \
             --output json > cli-result-2.json
           export RECENT_RUN_DIR=$(python -c "import json; payload = json.load(open('cli-result-2.json', 'r', encoding='utf-8')); print(payload['artifacts']['run_dir'])")
+          feacopilot --report-workspace-policy --workspace "$FEA_RUNS_DIR" --retention-days 7 --keep-latest 1 --output json > cli-workspace-report.json
+          python -c "import json; payload = json.load(open('cli-workspace-report.json', 'r', encoding='utf-8')); assert payload['summary']['discovered_count'] == 2; assert payload['summary']['valid_run_count'] == 2; assert payload['summary']['export_ready_count'] == 2; assert payload['summary']['promotion_ready_count'] == 2"
+          feacopilot --export-workspace-runs --workspace "$FEA_RUNS_DIR" --export-output-dir cli-workspace-exports --output json > cli-workspace-export.json
+          python -c "import json; from pathlib import Path; payload = json.load(open('cli-workspace-export.json', 'r', encoding='utf-8')); assert payload['summary']['exported_count'] == 2; assert payload['summary']['blocked_count'] == 0; assert payload['summary']['skipped_count'] == 0; assert all(Path(entry['archive_path']).exists() for entry in payload['exported_archives'])"
           python -c "import os; from datetime import datetime, timedelta, timezone; from pathlib import Path; old_run_dir = Path(os.environ['RUN_DIR']); old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp(); os.utime(old_run_dir / 'run_result.json', (old_time, old_time)); os.utime(old_run_dir, (old_time, old_time))"
           feacopilot --cleanup-runs --workspace "$FEA_RUNS_DIR" --retention-days 7 --dry-run --output json > cli-cleanup-dry-run.json
           python -c "import json, os; from pathlib import Path; payload = json.load(open('cli-cleanup-dry-run.json', 'r', encoding='utf-8')); assert payload['summary']['deleted_count'] == 1; assert payload['summary']['retained_count'] == 1; assert Path(os.environ['RUN_DIR']).exists()"

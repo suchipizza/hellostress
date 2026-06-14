@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fea_engine import (
@@ -439,3 +440,357 @@ def test_cli_can_cleanup_workspace_with_dry_run(tmp_path: Path) -> None:
     assert payload["summary"]["retained_count"] == 1
     assert payload["deleted_run_names"] == [old_run_dir.name]
     assert old_run_dir.exists() is True
+
+
+def test_cli_can_report_workspace_policy_in_json(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    run_payloads: list[dict[str, object]] = []
+    for _ in range(4):
+        stdout = io.StringIO()
+        exit_code = main(
+            ["--prompt", PROMPT, "--output", "json"],
+            settings_loader=lambda: settings,
+            stdout=stdout,
+            stderr=io.StringIO(),
+        )
+        assert exit_code == 0
+        run_payloads.append(json.loads(stdout.getvalue()))
+
+    clean_payload, warning_payload, blocked_payload, invalid_payload = run_payloads
+
+    warning_result_path = Path(warning_payload["artifacts"]["result_schema_path"])
+    warning_result = json.loads(warning_result_path.read_text(encoding="utf-8"))
+    warning_result["status"] = "completed_with_fallback"
+    warning_result["metrics_source"] = "fallback_estimate"
+    warning_result["fallback_used"] = True
+    warning_result["warnings"] = ["Fallback-derived metrics should be reviewed before promotion."]
+    warning_result_path.write_text(json.dumps(warning_result), encoding="utf-8")
+
+    blocked_result_path = Path(blocked_payload["artifacts"]["result_schema_path"])
+    blocked_backend_status_path = Path(blocked_payload["artifacts"]["backend_status_path"])
+    blocked_backend_status = json.loads(blocked_backend_status_path.read_text(encoding="utf-8"))
+    blocked_backend_status["backend_mode"] = "docker"
+    blocked_backend_status["status"] = "failed"
+    blocked_backend_status["exit_code"] = 2
+    blocked_backend_status["container_id"] = "container-123"
+    blocked_backend_status["container_status"] = "exited"
+    blocked_backend_status["cleanup_status"] = "removed"
+    blocked_backend_status_path.write_text(json.dumps(blocked_backend_status), encoding="utf-8")
+
+    blocked_backend_metadata_path = Path(blocked_payload["artifacts"]["backend_metadata_path"])
+    blocked_backend_metadata = json.loads(blocked_backend_metadata_path.read_text(encoding="utf-8"))
+    blocked_backend_metadata["backend_mode"] = "docker"
+    blocked_backend_metadata_path.write_text(json.dumps(blocked_backend_metadata), encoding="utf-8")
+
+    blocked_result = json.loads(blocked_result_path.read_text(encoding="utf-8"))
+    blocked_result["backend_mode"] = "docker"
+    blocked_result["backend_status"] = "failed"
+    blocked_result["backend_status_details"] = blocked_backend_status
+    blocked_result["backend_metadata"] = blocked_backend_metadata
+    blocked_result_path.write_text(json.dumps(blocked_result), encoding="utf-8")
+
+    invalid_result_path = Path(invalid_payload["artifacts"]["result_schema_path"])
+    invalid_result = json.loads(invalid_result_path.read_text(encoding="utf-8"))
+    invalid_result.pop("schema_version")
+    invalid_result_path.write_text(json.dumps(invalid_result), encoding="utf-8")
+
+    skipped_dir = settings.runs_workspace / "skipped-dir"
+    skipped_dir.mkdir(parents=True)
+
+    import os
+
+    old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp()
+    blocked_run_dir = Path(blocked_payload["artifacts"]["run_dir"])
+    os.utime(blocked_result_path, (old_time, old_time))
+    os.utime(blocked_run_dir, (old_time, old_time))
+
+    report_stdout = io.StringIO()
+    report_stderr = io.StringIO()
+    report_exit_code = main(
+        [
+            "--report-workspace-policy",
+            "--workspace",
+            str(settings.runs_workspace),
+            "--retention-days",
+            "7",
+            "--keep-latest",
+            "1",
+            "--output",
+            "json",
+        ],
+        stdout=report_stdout,
+        stderr=report_stderr,
+    )
+
+    payload = json.loads(report_stdout.getvalue())
+    assert report_exit_code == 0
+    assert report_stderr.getvalue() == ""
+    assert payload["summary"]["discovered_count"] == 5
+    assert payload["summary"]["valid_run_count"] == 3
+    assert payload["summary"]["invalid_run_count"] == 1
+    assert payload["summary"]["skipped_path_count"] == 1
+    assert payload["summary"]["export_ready_count"] == 2
+    assert payload["summary"]["promotion_ready_count"] == 1
+    assert payload["summary"]["manual_review_count"] == 2
+    assert payload["summary"]["retention_candidate_count"] == 1
+    assert payload["invalid_run_names"] == [Path(invalid_payload["artifacts"]["run_dir"]).name]
+    assert payload["skipped_path_names"] == ["skipped-dir"]
+
+    runs_by_name = {record["run_name"]: record for record in payload["runs"]}
+    assert runs_by_name[Path(clean_payload["artifacts"]["run_dir"]).name]["promotion_ready"] is True
+    assert runs_by_name[Path(warning_payload["artifacts"]["run_dir"]).name]["manual_review_required"] is True
+    assert runs_by_name[Path(blocked_payload["artifacts"]["run_dir"]).name]["export_ready"] is False
+    assert runs_by_name[Path(blocked_payload["artifacts"]["run_dir"]).name]["retention_candidate"] is True
+
+
+def test_cli_workspace_policy_text_output_lists_flagged_runs(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    first_stdout = io.StringIO()
+    second_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=first_stdout,
+        stderr=io.StringIO(),
+    )
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=second_stdout,
+        stderr=io.StringIO(),
+    )
+    warning_payload = json.loads(first_stdout.getvalue())
+    invalid_payload = json.loads(second_stdout.getvalue())
+
+    warning_result_path = Path(warning_payload["artifacts"]["result_schema_path"])
+    warning_result = json.loads(warning_result_path.read_text(encoding="utf-8"))
+    warning_result["fallback_used"] = True
+    warning_result["warnings"] = ["Fallback-derived metrics should be reviewed before promotion."]
+    warning_result_path.write_text(json.dumps(warning_result), encoding="utf-8")
+
+    invalid_result_path = Path(invalid_payload["artifacts"]["result_schema_path"])
+    invalid_result = json.loads(invalid_result_path.read_text(encoding="utf-8"))
+    invalid_result.pop("schema_version")
+    invalid_result_path.write_text(json.dumps(invalid_result), encoding="utf-8")
+
+    skipped_dir = settings.runs_workspace / "skipped-dir"
+    skipped_dir.mkdir(parents=True)
+
+    report_stdout = io.StringIO()
+    report_exit_code = main(
+        [
+            "--report-workspace-policy",
+            "--workspace",
+            str(settings.runs_workspace),
+            "--retention-days",
+            "7",
+        ],
+        stdout=report_stdout,
+        stderr=io.StringIO(),
+    )
+
+    output = report_stdout.getvalue()
+    assert report_exit_code == 0
+    assert "Workspace policy report: completed" in output
+    assert "Manual review required: 1" in output
+    assert "Invalid runs: 1" in output
+    assert "Flagged runs:" in output
+    assert Path(warning_payload["artifacts"]["run_dir"]).name in output
+    assert Path(invalid_payload["artifacts"]["run_dir"]).name in output
+    assert "Skipped path names: skipped-dir" in output
+
+
+def test_cli_can_bulk_export_workspace_runs_in_json(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    run_payloads: list[dict[str, object]] = []
+    for _ in range(5):
+        stdout = io.StringIO()
+        exit_code = main(
+            ["--prompt", PROMPT, "--output", "json"],
+            settings_loader=lambda: settings,
+            stdout=stdout,
+            stderr=io.StringIO(),
+        )
+        assert exit_code == 0
+        run_payloads.append(json.loads(stdout.getvalue()))
+
+    clean_payload, warning_payload, blocked_payload, invalid_payload, broken_payload = run_payloads
+
+    warning_result_path = Path(warning_payload["artifacts"]["result_schema_path"])
+    warning_result = json.loads(warning_result_path.read_text(encoding="utf-8"))
+    warning_result["status"] = "completed_with_fallback"
+    warning_result["metrics_source"] = "fallback_estimate"
+    warning_result["fallback_used"] = True
+    warning_result["warnings"] = ["Fallback-derived metrics should be reviewed before promotion."]
+    warning_result_path.write_text(json.dumps(warning_result), encoding="utf-8")
+
+    for payload in (blocked_payload, broken_payload):
+        result_path = Path(payload["artifacts"]["result_schema_path"])
+        backend_status_path = Path(payload["artifacts"]["backend_status_path"])
+        backend_status = json.loads(backend_status_path.read_text(encoding="utf-8"))
+        backend_status["backend_mode"] = "docker"
+        backend_status["status"] = "failed"
+        backend_status["exit_code"] = 2
+        backend_status["container_id"] = "container-123"
+        backend_status["container_status"] = "exited"
+        backend_status["cleanup_status"] = "removed"
+        backend_status_path.write_text(json.dumps(backend_status), encoding="utf-8")
+
+        backend_metadata_path = Path(payload["artifacts"]["backend_metadata_path"])
+        backend_metadata = json.loads(backend_metadata_path.read_text(encoding="utf-8"))
+        backend_metadata["backend_mode"] = "docker"
+        backend_metadata_path.write_text(json.dumps(backend_metadata), encoding="utf-8")
+
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        result["backend_mode"] = "docker"
+        result["backend_status"] = "failed"
+        result["backend_status_details"] = backend_status
+        result["backend_metadata"] = backend_metadata
+        result_path.write_text(json.dumps(result), encoding="utf-8")
+
+    invalid_result_path = Path(invalid_payload["artifacts"]["result_schema_path"])
+    invalid_result = json.loads(invalid_result_path.read_text(encoding="utf-8"))
+    invalid_result.pop("schema_version")
+    invalid_result_path.write_text(json.dumps(invalid_result), encoding="utf-8")
+
+    broken_result = json.loads(Path(broken_payload["artifacts"]["result_schema_path"]).read_text(encoding="utf-8"))
+    Path(broken_result["artifacts"]["metrics_path"]).unlink()
+
+    skipped_dir = settings.runs_workspace / "skipped-dir"
+    skipped_dir.mkdir(parents=True)
+
+    export_stdout = io.StringIO()
+    export_stderr = io.StringIO()
+    export_output_dir = tmp_path / "workspace-exports"
+    export_exit_code = main(
+        [
+            "--export-workspace-runs",
+            "--workspace",
+            str(settings.runs_workspace),
+            "--export-output-dir",
+            str(export_output_dir),
+            "--output",
+            "json",
+        ],
+        stdout=export_stdout,
+        stderr=export_stderr,
+    )
+
+    payload = json.loads(export_stdout.getvalue())
+    assert export_exit_code == 0
+    assert export_stderr.getvalue() == ""
+    assert payload["summary"]["discovered_count"] == 6
+    assert payload["summary"]["exported_count"] == 2
+    assert payload["summary"]["blocked_count"] == 3
+    assert payload["summary"]["skipped_count"] == 1
+    assert payload["summary"]["failed_count"] == 0
+    assert (export_output_dir / f"{Path(clean_payload['artifacts']['run_dir']).name}-artifacts.zip").exists() is True
+    assert (export_output_dir / f"{Path(warning_payload['artifacts']['run_dir']).name}-artifacts.zip").exists() is True
+    assert sorted(payload["blocked_run_names"]) == sorted(
+        [
+            Path(blocked_payload["artifacts"]["run_dir"]).name,
+            Path(broken_payload["artifacts"]["run_dir"]).name,
+            Path(invalid_payload["artifacts"]["run_dir"]).name,
+        ]
+    )
+
+    override_stdout = io.StringIO()
+    override_output_dir = tmp_path / "workspace-override-exports"
+    override_exit_code = main(
+        [
+            "--export-workspace-runs",
+            "--workspace",
+            str(settings.runs_workspace),
+            "--export-output-dir",
+            str(override_output_dir),
+            "--allow-degraded-export",
+            "--output",
+            "json",
+        ],
+        stdout=override_stdout,
+        stderr=io.StringIO(),
+    )
+
+    override_payload = json.loads(override_stdout.getvalue())
+    assert override_exit_code == 0
+    assert override_payload["summary"]["exported_count"] == 3
+    assert override_payload["summary"]["blocked_count"] == 1
+    assert override_payload["summary"]["failed_count"] == 1
+    assert override_payload["summary"]["override_export_count"] == 1
+    assert (override_output_dir / f"{Path(blocked_payload['artifacts']['run_dir']).name}-artifacts.zip").exists() is True
+    assert override_payload["failed_run_names"] == [Path(broken_payload["artifacts"]["run_dir"]).name]
+
+
+def test_cli_workspace_export_text_output_summarizes_outcomes(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    first_stdout = io.StringIO()
+    second_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=first_stdout,
+        stderr=io.StringIO(),
+    )
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=second_stdout,
+        stderr=io.StringIO(),
+    )
+    blocked_payload = json.loads(first_stdout.getvalue())
+    invalid_payload = json.loads(second_stdout.getvalue())
+
+    blocked_result_path = Path(blocked_payload["artifacts"]["result_schema_path"])
+    blocked_backend_status_path = Path(blocked_payload["artifacts"]["backend_status_path"])
+    blocked_backend_status = json.loads(blocked_backend_status_path.read_text(encoding="utf-8"))
+    blocked_backend_status["backend_mode"] = "docker"
+    blocked_backend_status["status"] = "failed"
+    blocked_backend_status["exit_code"] = 2
+    blocked_backend_status["container_id"] = "container-123"
+    blocked_backend_status["container_status"] = "exited"
+    blocked_backend_status["cleanup_status"] = "removed"
+    blocked_backend_status_path.write_text(json.dumps(blocked_backend_status), encoding="utf-8")
+
+    blocked_backend_metadata_path = Path(blocked_payload["artifacts"]["backend_metadata_path"])
+    blocked_backend_metadata = json.loads(blocked_backend_metadata_path.read_text(encoding="utf-8"))
+    blocked_backend_metadata["backend_mode"] = "docker"
+    blocked_backend_metadata_path.write_text(json.dumps(blocked_backend_metadata), encoding="utf-8")
+
+    blocked_result = json.loads(blocked_result_path.read_text(encoding="utf-8"))
+    blocked_result["backend_mode"] = "docker"
+    blocked_result["backend_status"] = "failed"
+    blocked_result["backend_status_details"] = blocked_backend_status
+    blocked_result["backend_metadata"] = blocked_backend_metadata
+    blocked_result_path.write_text(json.dumps(blocked_result), encoding="utf-8")
+
+    invalid_result_path = Path(invalid_payload["artifacts"]["result_schema_path"])
+    invalid_result = json.loads(invalid_result_path.read_text(encoding="utf-8"))
+    invalid_result.pop("schema_version")
+    invalid_result_path.write_text(json.dumps(invalid_result), encoding="utf-8")
+
+    skipped_dir = settings.runs_workspace / "skipped-dir"
+    skipped_dir.mkdir(parents=True)
+
+    export_stdout = io.StringIO()
+    export_exit_code = main(
+        [
+            "--export-workspace-runs",
+            "--workspace",
+            str(settings.runs_workspace),
+            "--export-output-dir",
+            str(tmp_path / "exports"),
+        ],
+        stdout=export_stdout,
+        stderr=io.StringIO(),
+    )
+
+    output = export_stdout.getvalue()
+    assert export_exit_code == 0
+    assert "Workspace export: completed" in output
+    assert "Blocked runs: 2" in output
+    assert "Skipped paths: 1" in output
+    assert "Exported archives:" in output
+    assert "Blocked or failed:" in output
+    assert Path(blocked_payload["artifacts"]["run_dir"]).name in output
+    assert Path(invalid_payload["artifacts"]["run_dir"]).name in output
+    assert "Skipped path names: skipped-dir" in output
