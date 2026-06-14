@@ -13,6 +13,7 @@ from fea_engine import (
     EXPORT_MANIFEST_VERSION,
     MAX_SUPPORTED_ARTIFACT_SCHEMA_VERSION,
     ArtifactValidationError,
+    ArtifactWorkflowError,
     build_bundle_summary,
     build_cleanup_summary,
     cleanup_run_workspace,
@@ -107,6 +108,33 @@ def write_bundle_at_run_dir(run_dir: Path) -> Path:
     return run_result_path
 
 
+def mutate_bundle_to_failed_backend(run_result_path: Path) -> None:
+    run_result_payload = json.loads(run_result_path.read_text(encoding="utf-8"))
+    backend_status_path = Path(run_result_payload["artifacts"]["backend_status_path"])
+    backend_metadata_path = Path(run_result_payload["artifacts"]["backend_metadata_path"])
+
+    backend_status_payload = json.loads(backend_status_path.read_text(encoding="utf-8"))
+    backend_status_payload["backend_mode"] = "docker"
+    backend_status_payload["status"] = "failed"
+    backend_status_payload["exit_code"] = 2
+    backend_status_payload["timed_out"] = False
+    backend_status_payload["metrics_present"] = True
+    backend_status_payload["container_id"] = "container-123"
+    backend_status_payload["container_status"] = "exited"
+    backend_status_payload["cleanup_status"] = "removed"
+    backend_status_path.write_text(json.dumps(backend_status_payload), encoding="utf-8")
+
+    backend_metadata_payload = json.loads(backend_metadata_path.read_text(encoding="utf-8"))
+    backend_metadata_payload["backend_mode"] = "docker"
+    backend_metadata_path.write_text(json.dumps(backend_metadata_payload), encoding="utf-8")
+
+    run_result_payload["backend_mode"] = "docker"
+    run_result_payload["backend_status"] = "failed"
+    run_result_payload["backend_status_details"] = backend_status_payload
+    run_result_payload["backend_metadata"] = backend_metadata_payload
+    run_result_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
+
+
 def test_load_artifact_bundle_validates_referenced_files(tmp_path: Path) -> None:
     run_result_path = write_bundle(tmp_path)
 
@@ -119,6 +147,9 @@ def test_load_artifact_bundle_validates_referenced_files(tmp_path: Path) -> None
     assert summary["compatibility"]["supported"] is True
     assert summary["diagnostics"]["all_referenced_files_present"] is True
     assert summary["diagnostics"]["all_embedded_payloads_consistent"] is True
+    assert summary["policy"]["quality_gate"]["passed"] is True
+    assert summary["policy"]["export"]["allowed"] is True
+    assert summary["policy"]["promotion"]["allowed"] is True
 
 
 def test_load_artifact_bundle_rejects_missing_schema_version(tmp_path: Path) -> None:
@@ -202,6 +233,9 @@ def test_build_bundle_summary_reports_triage_issues_for_degraded_run(tmp_path: P
     assert "container_cleanup_incomplete" in issue_codes
     assert "missing_referenced_file" in issue_codes
     assert "missing_generated_file" in issue_codes
+    assert summary["policy"]["quality_gate"]["passed"] is False
+    assert summary["policy"]["export"]["allowed"] is False
+    assert summary["policy"]["promotion"]["allowed"] is False
     assert any("stderr log" in action for action in summary["triage"]["suggested_actions"])
     assert any("Re-run the simulation" in action for action in summary["triage"]["suggested_actions"])
 
@@ -224,6 +258,8 @@ def test_export_artifact_bundle_writes_zip_with_expected_files(tmp_path: Path) -
     assert "solver.stderr.log" in names
     assert EXPORT_MANIFEST_NAME in names
     assert export_result.archive_sha256
+    assert export_result.policy["export"]["allowed"] is True
+    assert export_result.policy_override_used is False
     assert manifest_payload["manifest_version"] == EXPORT_MANIFEST_VERSION
     assert manifest_payload["file_count"] >= 7
     manifest_paths = {entry["relative_path"] for entry in manifest_payload["files"]}
@@ -231,6 +267,26 @@ def test_export_artifact_bundle_writes_zip_with_expected_files(tmp_path: Path) -
     assert "results/metrics.json" in manifest_paths
     for entry in manifest_payload["files"]:
         assert len(entry["sha256"]) == 64
+
+
+def test_export_artifact_bundle_blocks_policy_failed_bundle_by_default(tmp_path: Path) -> None:
+    run_result_path = write_bundle(tmp_path)
+    mutate_bundle_to_failed_backend(run_result_path)
+
+    with pytest.raises(ArtifactWorkflowError, match="Export policy blocked"):
+        export_artifact_bundle(run_result_path)
+
+
+def test_export_artifact_bundle_can_override_policy_failure(tmp_path: Path) -> None:
+    run_result_path = write_bundle(tmp_path)
+    mutate_bundle_to_failed_backend(run_result_path)
+
+    export_result = export_artifact_bundle(run_result_path, allow_degraded=True)
+
+    assert export_result.archive_path.exists()
+    assert export_result.policy["quality_gate"]["passed"] is False
+    assert export_result.policy["export"]["allowed"] is False
+    assert export_result.policy_override_used is True
 
 
 def test_cleanup_run_workspace_deletes_old_runs_and_keeps_latest(tmp_path: Path) -> None:

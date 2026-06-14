@@ -40,6 +40,12 @@ Inspection verifies:
 - basic generated-file and metrics diagnostics
 - triage severity, issue codes, backend log context, and suggested next actions
 
+Inspection JSON also exposes three policy decisions for automation:
+
+- `quality_gate`: passes when triage contains no error-severity issues
+- `export`: blocks packaging when the quality gate fails unless an explicit override is supplied
+- `promotion`: only allows clean bundles with no triage issues
+
 If inspection fails, treat the run as unsupported or incomplete instead of attempting best-effort recovery.
 
 If inspection succeeds but reports triage issues, treat the bundle as readable but degraded. The JSON inspection payload is intended to support automation such as:
@@ -57,6 +63,18 @@ feacopilot \
   --export-run-dir /path/to/run \
   --export-output ./run-artifacts.zip \
   --output json
+```
+
+If inspection reports a failed quality gate, export is blocked by default:
+
+```bash
+feacopilot --export-run-dir /path/to/run
+```
+
+Use the override only when you intentionally want to preserve a degraded-but-still-readable bundle for handoff or forensic retention:
+
+```bash
+feacopilot --export-run-dir /path/to/run --allow-degraded-export
 ```
 
 The export archive includes `export-manifest.json`, which records:

@@ -85,6 +85,8 @@ class ArtifactExportResult:
     archive_sha256: str
     manifest_name: str
     manifest: dict[str, Any]
+    policy: dict[str, Any]
+    policy_override_used: bool
 
 
 def load_artifact_bundle(run_result_path: Path) -> ArtifactBundle:
@@ -141,6 +143,7 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
     artifacts = run_result["artifacts"]
     diagnostics = _build_diagnostics(bundle)
     triage = _build_triage(bundle, diagnostics)
+    policy = _build_policy(triage)
     return {
         "valid": True,
         "schema_version": run_result["schema_version"],
@@ -162,6 +165,7 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
         "warnings": run_result["warnings"],
         "diagnostics": diagnostics,
         "triage": triage,
+        "policy": policy,
         "paths": {
             "run_result_path": str(bundle.run_result_path),
             "backend_status_path": str(bundle.backend_status_path),
@@ -176,8 +180,22 @@ def build_bundle_summary(bundle: ArtifactBundle) -> dict[str, Any]:
     }
 
 
-def export_artifact_bundle(run_result_path: Path, output_path: Path | None = None) -> ArtifactExportResult:
+def export_artifact_bundle(
+    run_result_path: Path,
+    output_path: Path | None = None,
+    *,
+    allow_degraded: bool = False,
+) -> ArtifactExportResult:
     bundle = load_artifact_bundle(run_result_path)
+    summary = build_bundle_summary(bundle)
+    export_policy = summary["policy"]["export"]
+    if not export_policy["allowed"] and not allow_degraded:
+        blocking_codes = ", ".join(export_policy["blocking_issue_codes"]) or "unknown"
+        raise ArtifactWorkflowError(
+            "Export policy blocked artifact bundle because the quality gate failed "
+            f"with issue codes: {blocking_codes}. Run inspection first or pass an explicit override."
+        )
+
     run_dir = Path(bundle.run_result["artifacts"]["run_dir"]).resolve()
     if output_path is None:
         output_path = run_dir / f"{run_dir.name}-artifacts.zip"
@@ -195,6 +213,8 @@ def export_artifact_bundle(run_result_path: Path, output_path: Path | None = Non
         archive_sha256=_compute_file_sha256(output_path),
         manifest_name=EXPORT_MANIFEST_NAME,
         manifest=manifest,
+        policy=summary["policy"],
+        policy_override_used=allow_degraded and not export_policy["allowed"],
     )
 
 
@@ -530,6 +550,35 @@ def _build_triage(bundle: ArtifactBundle, diagnostics: dict[str, Any]) -> dict[s
     }
 
 
+def _build_policy(triage: dict[str, Any]) -> dict[str, Any]:
+    error_issue_codes = _ordered_issue_codes(triage["issues"], severities={"error"})
+    warning_issue_codes = _ordered_issue_codes(triage["issues"], severities={"warning"})
+    quality_gate_passed = not error_issue_codes
+    promotion_blocking_codes = _ordered_issue_codes(triage["issues"], severities={"error", "warning"})
+    promotion_allowed = not promotion_blocking_codes
+    return {
+        "quality_gate": {
+            "status": "passed" if quality_gate_passed else "failed",
+            "passed": quality_gate_passed,
+            "blocking_issue_codes": error_issue_codes,
+            "warning_issue_codes": warning_issue_codes,
+            "policy": "The quality gate passes when inspection triage contains no error-severity issues.",
+        },
+        "export": {
+            "allowed": quality_gate_passed,
+            "requires_override": not quality_gate_passed,
+            "blocking_issue_codes": error_issue_codes,
+            "policy": "Export is blocked when the quality gate fails unless an explicit override is supplied.",
+        },
+        "promotion": {
+            "allowed": promotion_allowed,
+            "requires_review": not promotion_allowed,
+            "blocking_issue_codes": promotion_blocking_codes,
+            "policy": "Promotion is only allowed for bundles with no triage issues; warnings require manual review.",
+        },
+    }
+
+
 def _triage_issue(
     severity: str,
     code: str,
@@ -550,6 +599,20 @@ def _triage_issue(
 def _append_action(actions: list[str], message: str) -> None:
     if message not in actions:
         actions.append(message)
+
+
+def _ordered_issue_codes(issues: list[dict[str, Any]], *, severities: set[str]) -> list[str]:
+    seen: set[str] = set()
+    codes: list[str] = []
+    for issue in issues:
+        if issue["severity"] not in severities:
+            continue
+        code = issue["code"]
+        if code in seen:
+            continue
+        seen.add(code)
+        codes.append(code)
+    return codes
 
 
 def _bundle_files(bundle: ArtifactBundle) -> list[Path]:

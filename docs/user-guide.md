@@ -52,7 +52,8 @@ For operational details around inspection, export manifests, retention, and auto
 - The CLI writes the same backend artifacts as the app, including `run_result.json`.
 - Run artifacts now include a `schema_version` field for contract validation.
 - The CLI inspection command now reports compatibility status, referenced file presence, artifact consistency checks, and triage guidance for degraded runs.
-- The CLI export command writes a validated zip archive of a completed run and includes `export-manifest.json` with file checksums.
+- The CLI inspection JSON output now includes machine-readable quality-gate, export, and promotion decisions.
+- The CLI export command writes a validated zip archive of a completed run and includes `export-manifest.json` with file checksums, but blocks by default when the quality gate fails unless `--allow-degraded-export` is provided.
 - The CLI cleanup command applies retention rules to the run workspace, can preview deletions with `--dry-run`, and returns summary counts in JSON mode.
 - If a prompt is ambiguous or missing units, the app now fails explicitly instead of guessing.
 

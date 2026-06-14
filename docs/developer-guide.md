@@ -129,7 +129,9 @@ Phase 4 defines a machine-readable compatibility boundary for persisted run arti
 - Inspection fails fast on unsupported schema versions instead of attempting a best-effort parse.
 - Inspection diagnostics also verify referenced file presence and consistency between `run_result.json` embedded payloads and the referenced backend artifact files.
 - Inspection triage now classifies degraded bundles with machine-readable issue codes, severity, backend log context, and suggested operator actions.
+- Inspection policy now derives quality-gate, export, and promotion decisions from that triage surface so automation does not need to recreate policy client-side.
 - Export first validates the bundle, then writes a zip archive rooted at the run directory.
+- Export now enforces the inspection quality gate by default and only allows degraded bundle export when an explicit override is requested.
 - Export archives now include `export-manifest.json` with per-file relative paths, sizes, and SHA-256 checksums for downstream verification.
 - Cleanup applies retention rules to direct child run directories in the configured workspace and supports `keep_latest` plus `dry_run`.
 - Cleanup JSON output now includes summary counts and run-name lists so automation can react without scraping text output.

@@ -133,6 +133,8 @@ def test_cli_can_inspect_run_result_json(tmp_path: Path) -> None:
     assert inspection_payload["backend_status"] == "succeeded"
     assert inspection_payload["diagnostics"]["all_referenced_files_present"] is True
     assert inspection_payload["triage"]["severity"] == "ok"
+    assert inspection_payload["policy"]["quality_gate"]["passed"] is True
+    assert inspection_payload["policy"]["export"]["allowed"] is True
 
 
 def test_cli_can_inspect_run_directory(tmp_path: Path) -> None:
@@ -161,6 +163,7 @@ def test_cli_can_inspect_run_directory(tmp_path: Path) -> None:
     assert "Compatibility supported: True" in output
     assert "Run status: completed" in output
     assert "Triage severity: ok" in output
+    assert "quality_gate_passed: True" in output
     assert "Issues: none" in output
 
 
@@ -210,6 +213,7 @@ def test_cli_inspection_reports_triage_for_degraded_bundle(tmp_path: Path) -> No
     assert "Triage severity: error" in output
     assert "[error] backend_timed_out" in output
     assert "[warning] fallback_used" in output
+    assert "export_allowed: False" in output
     assert "Suggested actions:" in output
 
 
@@ -267,12 +271,121 @@ def test_cli_can_export_run_bundle(tmp_path: Path) -> None:
     assert export_stderr.getvalue() == ""
     assert archive_path.exists()
     assert export_payload["archive_sha256"]
+    assert export_payload["policy"]["quality_gate"]["passed"] is True
+    assert export_payload["policy_override_used"] is False
     assert export_payload["manifest_name"] == EXPORT_MANIFEST_NAME
     assert export_payload["manifest"]["file_count"] >= 7
     with zipfile.ZipFile(archive_path) as archive:
         names = set(archive.namelist())
     assert "run_result.json" in names
     assert EXPORT_MANIFEST_NAME in names
+
+
+def test_cli_blocks_export_for_policy_failed_bundle_without_override(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    initial_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=initial_stdout,
+        stderr=io.StringIO(),
+    )
+    run_payload = json.loads(initial_stdout.getvalue())
+    result_schema_path = Path(run_payload["artifacts"]["result_schema_path"])
+
+    backend_status_path = Path(run_payload["artifacts"]["backend_status_path"])
+    backend_status_payload = json.loads(backend_status_path.read_text(encoding="utf-8"))
+    backend_status_payload["backend_mode"] = "docker"
+    backend_status_payload["status"] = "failed"
+    backend_status_payload["exit_code"] = 2
+    backend_status_payload["container_id"] = "container-123"
+    backend_status_payload["container_status"] = "exited"
+    backend_status_payload["cleanup_status"] = "removed"
+    backend_status_path.write_text(json.dumps(backend_status_payload), encoding="utf-8")
+
+    backend_metadata_path = Path(run_payload["artifacts"]["backend_metadata_path"])
+    backend_metadata_payload = json.loads(backend_metadata_path.read_text(encoding="utf-8"))
+    backend_metadata_payload["backend_mode"] = "docker"
+    backend_metadata_path.write_text(json.dumps(backend_metadata_payload), encoding="utf-8")
+
+    run_result_payload = json.loads(result_schema_path.read_text(encoding="utf-8"))
+    run_result_payload["backend_mode"] = "docker"
+    run_result_payload["backend_status"] = "failed"
+    run_result_payload["backend_status_details"] = backend_status_payload
+    run_result_payload["backend_metadata"] = backend_metadata_payload
+    result_schema_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
+
+    export_stdout = io.StringIO()
+    export_stderr = io.StringIO()
+    export_exit_code = main(
+        ["--export-run-result", str(result_schema_path)],
+        stdout=export_stdout,
+        stderr=export_stderr,
+    )
+
+    assert export_exit_code == 1
+    assert export_stdout.getvalue() == ""
+    assert "Export policy blocked" in export_stderr.getvalue()
+
+
+def test_cli_can_override_export_policy_for_degraded_bundle(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    initial_stdout = io.StringIO()
+    main(
+        ["--prompt", PROMPT, "--output", "json"],
+        settings_loader=lambda: settings,
+        stdout=initial_stdout,
+        stderr=io.StringIO(),
+    )
+    run_payload = json.loads(initial_stdout.getvalue())
+    result_schema_path = Path(run_payload["artifacts"]["result_schema_path"])
+    archive_path = tmp_path / "override-export.zip"
+
+    backend_status_path = Path(run_payload["artifacts"]["backend_status_path"])
+    backend_status_payload = json.loads(backend_status_path.read_text(encoding="utf-8"))
+    backend_status_payload["backend_mode"] = "docker"
+    backend_status_payload["status"] = "failed"
+    backend_status_payload["exit_code"] = 2
+    backend_status_payload["container_id"] = "container-123"
+    backend_status_payload["container_status"] = "exited"
+    backend_status_payload["cleanup_status"] = "removed"
+    backend_status_path.write_text(json.dumps(backend_status_payload), encoding="utf-8")
+
+    backend_metadata_path = Path(run_payload["artifacts"]["backend_metadata_path"])
+    backend_metadata_payload = json.loads(backend_metadata_path.read_text(encoding="utf-8"))
+    backend_metadata_payload["backend_mode"] = "docker"
+    backend_metadata_path.write_text(json.dumps(backend_metadata_payload), encoding="utf-8")
+
+    run_result_payload = json.loads(result_schema_path.read_text(encoding="utf-8"))
+    run_result_payload["backend_mode"] = "docker"
+    run_result_payload["backend_status"] = "failed"
+    run_result_payload["backend_status_details"] = backend_status_payload
+    run_result_payload["backend_metadata"] = backend_metadata_payload
+    result_schema_path.write_text(json.dumps(run_result_payload), encoding="utf-8")
+
+    export_stdout = io.StringIO()
+    export_stderr = io.StringIO()
+    export_exit_code = main(
+        [
+            "--export-run-result",
+            str(result_schema_path),
+            "--export-output",
+            str(archive_path),
+            "--allow-degraded-export",
+            "--output",
+            "json",
+        ],
+        stdout=export_stdout,
+        stderr=export_stderr,
+    )
+
+    export_payload = json.loads(export_stdout.getvalue())
+    assert export_exit_code == 0
+    assert export_stderr.getvalue() == ""
+    assert archive_path.exists()
+    assert export_payload["policy"]["quality_gate"]["passed"] is False
+    assert export_payload["policy"]["export"]["allowed"] is False
+    assert export_payload["policy_override_used"] is True
 
 
 def test_cli_can_cleanup_workspace_with_dry_run(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ The target is a more machine-friendly and supportable run artifact surface witho
 - reusable artifact loading and validation utilities
 - CLI inspection for completed runs
 - operator-oriented inspection triage for degraded runs
+- policy enforcement for export and promotion decisions
 - updated docs for artifact consumers and operators
 
 ## Ticket Sequence
@@ -66,6 +67,18 @@ Acceptance:
 - Inspection JSON exposes issue severity, issue codes, backend log context, and suggested actions.
 - Inspection text output surfaces the same triage summary for operators without requiring JSON parsing.
 - Tests cover degraded bundles such as missing metrics, fallback use, and incomplete Docker cleanup.
+
+### P4-06. Policy Enforcement
+
+- Add a machine-readable quality gate on top of inspection triage.
+- Block export by default when the quality gate fails, while allowing an explicit operator override for degraded-but-exportable bundles.
+- Expose promotion readiness separately so downstream automation can require a fully clean bundle.
+
+Acceptance:
+
+- Inspection JSON exposes quality-gate, export, and promotion policy decisions.
+- Export fails clearly on policy-blocked bundles unless an explicit override is provided.
+- Tests cover blocked export, overridden degraded export, and clean bundle policy pass behavior.
 
 ## Out of Scope
 

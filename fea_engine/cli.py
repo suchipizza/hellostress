@@ -62,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output zip path for artifact export workflows.",
     )
     parser.add_argument(
+        "--allow-degraded-export",
+        action="store_true",
+        help="Override export policy and package a bundle even when the inspection quality gate fails.",
+    )
+    parser.add_argument(
         "--cleanup-runs",
         action="store_true",
         help="Clean old run directories from the configured workspace.",
@@ -126,7 +131,12 @@ def main(
         if args.inspect_run_result or args.inspect_run_dir:
             payload = inspect_to_payload(args.inspect_run_result, args.inspect_run_dir)
         elif args.export_run_result or args.export_run_dir:
-            payload = export_to_payload(args.export_run_result, args.export_run_dir, args.export_output)
+            payload = export_to_payload(
+                args.export_run_result,
+                args.export_run_dir,
+                args.export_output,
+                allow_degraded_export=args.allow_degraded_export,
+            )
         elif args.cleanup_runs:
             settings = settings_loader() if settings_loader is not None else RuntimeSettings.from_env()
             payload = cleanup_to_payload(
@@ -188,6 +198,8 @@ def _validate_mode_args(parser: argparse.ArgumentParser, args: argparse.Namespac
         parser.error("--retention-days, --keep-latest, --dry-run, and --workspace are only valid with --cleanup-runs.")
     if not any(export_inputs) and args.export_output is not None:
         parser.error("--export-output is only valid with export workflows.")
+    if not any(export_inputs) and args.allow_degraded_export:
+        parser.error("--allow-degraded-export is only valid with export workflows.")
 
 
 def _read_prompt(prompt: Optional[str], prompt_file: Optional[Path]) -> str:
@@ -239,6 +251,8 @@ def export_to_payload(
     export_run_result: Optional[Path],
     export_run_dir: Optional[Path],
     export_output: Optional[Path],
+    *,
+    allow_degraded_export: bool,
 ) -> dict[str, object]:
     run_result_path = export_run_result
     if export_run_dir is not None:
@@ -246,13 +260,19 @@ def export_to_payload(
     if run_result_path is None:
         raise AssertionError("Export validation should happen in argparse.")
     bundle = load_artifact_bundle(run_result_path)
-    export_result = export_artifact_bundle(run_result_path, output_path=export_output)
+    export_result = export_artifact_bundle(
+        run_result_path,
+        output_path=export_output,
+        allow_degraded=allow_degraded_export,
+    )
     return {
         "export_mode": True,
         "archive_path": str(export_result.archive_path),
         "archive_sha256": export_result.archive_sha256,
         "manifest_name": export_result.manifest_name,
         "manifest": export_result.manifest,
+        "policy": export_result.policy,
+        "policy_override_used": export_result.policy_override_used,
         "run_result_path": str(bundle.run_result_path),
         "run_dir": bundle.run_result["artifacts"]["run_dir"],
         "backend_mode": bundle.run_result["backend_mode"],
@@ -315,6 +335,7 @@ def render_inspection_summary(payload: dict[str, object]) -> str:
     compatibility = payload["compatibility"]
     diagnostics = payload["diagnostics"]
     triage = payload["triage"]
+    policy = payload["policy"]
     backend_context = triage["backend_context"]
     paths = payload["paths"]
     warnings = payload["warnings"]
@@ -329,6 +350,10 @@ def render_inspection_summary(payload: dict[str, object]) -> str:
         f"Metrics source: {payload['metrics_source']}",
         f"Fallback used: {payload['fallback_used']}",
         f"Triage severity: {triage['severity']}",
+        "Policy:",
+        f"  quality_gate_passed: {policy['quality_gate']['passed']}",
+        f"  export_allowed: {policy['export']['allowed']}",
+        f"  promotion_allowed: {policy['promotion']['allowed']}",
         "Diagnostics:",
         f"  all_referenced_files_present: {diagnostics['all_referenced_files_present']}",
         f"  all_embedded_payloads_consistent: {diagnostics['all_embedded_payloads_consistent']}",
@@ -373,10 +398,13 @@ def render_inspection_summary(payload: dict[str, object]) -> str:
 
 
 def render_export_summary(payload: dict[str, object]) -> str:
+    policy = payload["policy"]
     lines = [
         "Export: completed",
         f"Run status: {payload['status']}",
         f"Backend mode: {payload['backend_mode']}",
+        f"Quality gate passed: {policy['quality_gate']['passed']}",
+        f"Export policy override used: {payload['policy_override_used']}",
         f"Run result: {payload['run_result_path']}",
         f"Run dir: {payload['run_dir']}",
         f"Archive: {payload['archive_path']}",
