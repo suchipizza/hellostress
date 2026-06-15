@@ -8,7 +8,14 @@ from pathlib import Path
 import plotly.graph_objects as go
 import pytest
 
-from fea_engine import ARTIFACT_SCHEMA_VERSION, BeamSection, LoadCase, SimulationService, SimulationSpec
+from fea_engine import (
+    ARTIFACT_SCHEMA_VERSION,
+    BeamSection,
+    FenicsScriptGenerator,
+    LoadCase,
+    SimulationService,
+    SimulationSpec,
+)
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType
 from fea_engine.solver import FenicsSolver
 
@@ -184,3 +191,25 @@ def test_service_docker_smoke_writes_backend_and_result_artifacts(tmp_path: Path
     assert schema_payload["run_metadata"]["stdout_path"] == str(result.artifacts.run_metadata.stdout_path)
     assert schema_payload["run_metadata"]["stderr_path"] == str(result.artifacts.run_metadata.stderr_path)
     assert schema_payload["runtime_metadata"]["cleanup_status"] == "removed"
+
+
+def test_generated_dolfinx_beam_script_runs_in_docker(tmp_path: Path) -> None:
+    if not docker_runtime_available():
+        pytest.skip("Docker runtime is not available for the integration smoke test.")
+
+    spec = build_beam_spec()
+    spec.mesh_density = 8
+    solver = FenicsSolver(mode="docker", workspace=tmp_path)
+    script = FenicsScriptGenerator().render(spec)
+
+    artifacts = solver.run(spec, script)
+
+    metrics_payload = json.loads(artifacts.metrics_path.read_text(encoding="utf-8"))
+    assert artifacts.backend_mode == "docker"
+    assert artifacts.backend_status == "succeeded"
+    assert artifacts.run_metadata.exit_code == 0
+    assert artifacts.metrics_path.exists()
+    assert (artifacts.results_dir / "displacement.xdmf").exists()
+    assert (artifacts.results_dir / "stress.xdmf").exists()
+    assert metrics_payload["max_deflection"] >= 0.0
+    assert metrics_payload["max_stress"] >= 0.0
