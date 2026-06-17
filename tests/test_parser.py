@@ -94,3 +94,33 @@ def test_requires_load_with_units(parser) -> None:
 def test_rejects_unsupported_plate_point_load(parser) -> None:
     with pytest.raises(SpecValidationError):
         parser.parse("Analyze a 0.5 m by 0.3 m aluminum plate 5 mm thick with a 100 N downward point load.")
+
+
+def test_bracket_prompt_parses_screening_dimensions(parser) -> None:
+    spec = parser.parse(
+        "Analyze a steel L-bracket with a 120 mm arm, 40 mm wide and 10 mm thick, fixed at the base with a 2 kN downward load at the free hole."
+    )
+
+    assert spec.geometry == GeometryType.BRACKET
+    assert spec.length == pytest.approx(0.12)
+    assert spec.beam_section is not None
+    assert spec.beam_section.height == pytest.approx(0.01)
+    assert spec.beam_section.width == pytest.approx(0.04)
+    assert spec.loads[0].magnitude == pytest.approx(2000.0)
+    assert spec.loads[0].location == pytest.approx(1.0)
+    assert spec.metadata["analysis_mode"] == "analytical_screening"
+
+
+def test_plate_with_hole_prompt_parses_screening_dimensions(parser) -> None:
+    spec = parser.parse(
+        "Analyze a 0.4 m by 0.2 m aluminum plate 8 mm thick with a 40 mm central hole under 40 MPa axial tension."
+    )
+
+    assert spec.geometry == GeometryType.PLATE_WITH_HOLE
+    assert spec.length == pytest.approx(0.4)
+    assert spec.plate_dimensions is not None
+    assert spec.plate_dimensions.width == pytest.approx(0.2)
+    assert spec.plate_dimensions.thickness == pytest.approx(0.008)
+    assert spec.loads[0].magnitude == pytest.approx(40_000_000.0)
+    assert spec.loads[0].direction == "+x"
+    assert spec.metadata["hole_diameter_m"] == pytest.approx(0.04)

@@ -1,0 +1,1 @@
+Analyze a 0.4 m by 0.2 m aluminum plate 8 mm thick with a 40 mm central hole under 40 MPa axial tension.

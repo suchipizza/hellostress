@@ -1,0 +1,52 @@
+{
+  "status": "completed",
+  "solver_mode": "mock",
+  "backend_status": "succeeded",
+  "metrics_source": "solver_artifact",
+  "fallback_used": false,
+  "warnings": [],
+  "summary": "Simulated plate with length 0.50 m. Max deflection = 1.720e-03 m. Max stress = 1.539e+08 Pa. Material yield ~ 250000000.0 Pa.",
+  "metrics": {
+    "max_deflection": 0.0017198999999999997,
+    "max_stress": 153899999.99999997
+  },
+  "spec": {
+    "prompt": "Analyze a square steel plate 0.5 m by 0.5 m 5 mm thick under a uniform pressure of 50 kPa.",
+    "geometry": "plate",
+    "length": 0.5,
+    "beam_section": null,
+    "plate_dimensions": {
+      "width": 0.5,
+      "thickness": 0.005
+    },
+    "mesh_density": 32,
+    "boundary_condition": "fixed",
+    "loads": [
+      {
+        "load_type": "pressure",
+        "magnitude": 50000.0,
+        "direction": "-z",
+        "location": null,
+        "description": "Auto-parsed load",
+        "units": "Pa"
+      }
+    ],
+    "material": {
+      "name": "Steel",
+      "youngs_modulus": 200000000000.0,
+      "poisson_ratio": 0.3,
+      "density": 7850,
+      "yield_strength": 250000000.0
+    },
+    "units": "SI",
+    "metadata": {}
+  },
+  "artifacts": {
+    "run_dir": "/var/folders/7z/00q9spx14hbdhszfbk28mx1m0000gn/T/fea_runs/fea_zddgi95r",
+    "result_schema_path": "/var/folders/7z/00q9spx14hbdhszfbk28mx1m0000gn/T/fea_runs/fea_zddgi95r/run_result.json",
+    "script_path": "/var/folders/7z/00q9spx14hbdhszfbk28mx1m0000gn/T/fea_runs/fea_zddgi95r/simulation.py",
+    "metrics_path": "/var/folders/7z/00q9spx14hbdhszfbk28mx1m0000gn/T/fea_runs/fea_zddgi95r/results/metrics.json",
+    "backend_status_path": "/var/folders/7z/00q9spx14hbdhszfbk28mx1m0000gn/T/fea_runs/fea_zddgi95r/backend_status.json",
+    "backend_metadata_path": "/var/folders/7z/00q9spx14hbdhszfbk28mx1m0000gn/T/fea_runs/fea_zddgi95r/backend_metadata.json"
+  }
+}

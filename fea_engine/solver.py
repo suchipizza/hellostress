@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 from .artifacts import ARTIFACT_SCHEMA_VERSION
 from .errors import SolverExecutionError, UnsupportedSolverModeError
-from .models import SimulationSpec
+from .models import GeometryType, SimulationSpec
 from .utils import AnalyticalEstimator
 
 
@@ -103,6 +103,14 @@ class FenicsSolver:
         stderr_path = run_path / "solver.stderr.log"
 
         if self.mode == "docker":
+            if spec.geometry not in {GeometryType.BEAM, GeometryType.PLATE}:
+                raise SolverExecutionError(
+                    f"Docker solver mode currently supports only beam and rectangular plate geometries. Geometry '{spec.geometry.value}' is available in analytical mock mode only.",
+                    backend_mode="docker",
+                    run_dir=run_path,
+                    stdout_path=stdout_path,
+                    stderr_path=stderr_path,
+                )
             run_metadata, runtime_metadata = self._run_in_docker(
                 script_path,
                 run_path,

@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from fea_engine import ARTIFACT_SCHEMA_VERSION, BeamSection, LoadCase, SolverExecutionError, UnsupportedSolverModeError
+from fea_engine import ARTIFACT_SCHEMA_VERSION, BeamSection, LoadCase, PlateDimensions, SolverExecutionError, UnsupportedSolverModeError
 from fea_engine.models import DEFAULT_MATERIALS, GeometryType, LoadType, SimulationSpec
 from fea_engine.solver import FenicsSolver
 
@@ -28,6 +28,19 @@ def build_beam_spec() -> SimulationSpec:
             )
         ],
         material=DEFAULT_MATERIALS["steel"],
+    )
+
+
+def build_plate_with_hole_spec() -> SimulationSpec:
+    return SimulationSpec(
+        prompt="plate with hole",
+        geometry=GeometryType.PLATE_WITH_HOLE,
+        length=0.4,
+        plate_dimensions=PlateDimensions(width=0.2, thickness=0.008),
+        boundary_condition="fixed",
+        loads=[LoadCase(load_type=LoadType.PRESSURE, magnitude=40_000_000.0, direction="+x", units="Pa")],
+        material=DEFAULT_MATERIALS["aluminum"],
+        metadata={"hole_diameter_m": 0.04},
     )
 
 
@@ -73,6 +86,14 @@ def test_solver_docker_mode_requires_docker(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(SolverExecutionError):
         FenicsSolver(mode="docker")
+
+
+def test_solver_docker_rejects_geometries_without_backend_support(tmp_path: Path) -> None:
+    solver = FenicsSolver(mode="mock", workspace=tmp_path)
+    solver.mode = "docker"
+
+    with pytest.raises(SolverExecutionError, match="analytical mock mode only"):
+        solver.run(build_plate_with_hole_spec(), "print('simulation')")
 
 
 def test_solver_docker_success_captures_stdout_stderr_metadata(

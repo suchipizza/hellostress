@@ -1,0 +1,6 @@
+{
+  "geometry": "beam",
+  "expected_deflection_m": 3.0e-05,
+  "expected_stress_pa": 900000.0,
+  "tolerance_relative": 1e-09
+}

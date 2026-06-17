@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reporting guidance
+    url: https://github.com/suchipizza/hellostress/security/policy
+    about: Do not post vulnerabilities publicly. Follow the disclosure guidance in SECURITY.md.

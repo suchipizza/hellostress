@@ -1,0 +1,7 @@
+{
+  "status": "completed",
+  "solver_mode": "mock",
+  "geometry": "plate",
+  "max_deflection_m": 0.001164764448,
+  "max_stress_pa": 85608000.0
+}

@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 class GeometryType(str, Enum):
     BEAM = "beam"
     PLATE = "plate"
+    BRACKET = "bracket"
+    PLATE_WITH_HOLE = "plate_with_hole"
 
 
 class LoadType(str, Enum):

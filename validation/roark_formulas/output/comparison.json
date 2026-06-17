@@ -1,0 +1,22 @@
+{
+  "source": "Timoshenko and Woinowsky-Krieger, Theory of Plates and Shells, Table 35 (nu = 0.3)",
+  "status": "completed",
+  "solver_mode": "mock",
+  "reference": {
+    "expected_deflection_m": 0.0017199,
+    "expected_stress_pa": 153900000.0,
+    "tolerance_relative": 0.001
+  },
+  "observed": {
+    "max_deflection": 0.0017198999999999997,
+    "max_stress": 153899999.99999997
+  },
+  "relative_error": {
+    "max_deflection": 1.2607735013495024e-16,
+    "max_stress": 1.936473189583841e-16
+  },
+  "within_tolerance": {
+    "max_deflection": true,
+    "max_stress": true
+  }
+}

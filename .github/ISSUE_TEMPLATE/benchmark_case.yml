@@ -1,0 +1,48 @@
+name: Benchmark case
+description: Contribute or request a reproducible linear-elastic benchmark case.
+title: "[Benchmark]: "
+labels:
+  - benchmark
+body:
+  - type: input
+    id: geometry
+    attributes:
+      label: Geometry or case name
+      placeholder: cantilever beam, plate with hole, L-bracket
+    validations:
+      required: true
+  - type: textarea
+    id: definition
+    attributes:
+      label: Problem definition
+      description: Geometry, material, load, and boundary conditions.
+    validations:
+      required: true
+  - type: textarea
+    id: assumptions
+    attributes:
+      label: Assumptions
+      description: List simplifications explicitly.
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference result and source
+      description: Include the analytical, handbook, or benchmark source and the expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproducible command
+      description: Include the command or script path needed to reproduce the case.
+    validations:
+      required: true
+  - type: input
+    id: tolerance
+    attributes:
+      label: Expected tolerance
+      placeholder: e.g. 2% on max deflection
+    validations:
+      required: true

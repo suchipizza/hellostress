@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: FEA Copilot
+message: "If you use FEA Copilot in teaching, benchmarking, or research, please cite the repository."
+type: software
+authors:
+  - name: HelloStress
+version: 0.3.0
+license: Apache-2.0
+repository-code: https://github.com/suchipizza/hellostress
+url: https://github.com/suchipizza/hellostress
+abstract: "Natural-language FEA copilot for reproducible linear-elastic beam and plate workflows."

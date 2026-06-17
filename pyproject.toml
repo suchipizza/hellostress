@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "HelloStress" }]
+keywords = ["fea", "finite-element-analysis", "mechanical-engineering", "simulation", "python"]
 dependencies = [
   "streamlit>=1.32",
   "openai>=1.12",
@@ -17,6 +18,8 @@ dependencies = [
   "plotly>=5.18",
   "numpy>=1.26",
   "python-dotenv>=1.0",
+  "h5py>=3.10",
+  "pyvista>=0.48",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -35,6 +38,9 @@ feacopilot = "fea_engine.cli:main"
 
 [project.urls]
 Repository = "https://github.com/suchipizza/hellostress"
+Documentation = "https://github.com/suchipizza/hellostress/blob/main/docs/quickstart.md"
+Changelog = "https://github.com/suchipizza/hellostress/blob/main/CHANGELOG.md"
+Issues = "https://github.com/suchipizza/hellostress/issues"
 
 [tool.setuptools.packages.find]
 include = ["fea_engine*", "templates*"]

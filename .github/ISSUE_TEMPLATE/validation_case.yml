@@ -1,0 +1,52 @@
+name: Validation case
+description: Propose a reproducible validation case with a public reference and tolerance.
+title: "[Validation]: "
+labels:
+  - validation
+body:
+  - type: input
+    id: case_name
+    attributes:
+      label: Case name
+      placeholder: cantilever beam hand calc, rectangular plate, solver comparison
+    validations:
+      required: true
+  - type: dropdown
+    id: reference_type
+    attributes:
+      label: Reference type
+      options:
+        - analytical
+        - hand calculation
+        - numerical benchmark
+        - solver comparison
+    validations:
+      required: true
+  - type: textarea
+    id: assumptions
+    attributes:
+      label: Assumptions
+      description: Geometry, loads, boundary conditions, simplifications.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result and tolerance
+      description: Include units and tolerance policy.
+    validations:
+      required: true
+  - type: textarea
+    id: reference_source
+    attributes:
+      label: Public reference source
+      description: Cite the handbook, paper, or formula source.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Reproducible command
+      description: Include the exact command or script path.
+    validations:
+      required: true

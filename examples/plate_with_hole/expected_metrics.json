@@ -1,0 +1,7 @@
+{
+  "status": "completed",
+  "solver_mode": "mock",
+  "geometry": "plate_with_hole",
+  "max_deflection_m": 0.0002857142857,
+  "max_stress_pa": 120000000.0
+}

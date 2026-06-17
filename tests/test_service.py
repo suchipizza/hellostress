@@ -176,6 +176,8 @@ def test_service_coordinates_pipeline_and_progress_messages(tmp_path: Path) -> N
     assert result.result_schema_path.exists()
     assert result.metrics == {"max_deflection": 1.2e-3, "max_stress": 2.4e6}
     assert result.figure is figure
+    assert result.pyvista_image is None
+    assert result.visualization_source == "estimated_profile"
     assert result.summary == "summary"
     assert result.solver_mode == "mock"
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
@@ -219,6 +221,8 @@ def test_service_runs_real_mock_pipeline() -> None:
     assert result.metrics["max_stress"] > 0
     assert result.summary
     assert result.solver_mode == "mock"
+    assert result.visualization_source == "estimated_profile"
+    assert result.pyvista_image is None
     assert result.result_schema_path.exists()
     schema_payload = json.loads(result.result_schema_path.read_text(encoding="utf-8"))
     assert schema_payload["schema_version"] == ARTIFACT_SCHEMA_VERSION
@@ -248,6 +252,7 @@ def test_service_uses_runtime_settings_for_default_dependencies(tmp_path: Path) 
     assert result.spec.mesh_density == 36
     assert result.artifacts.run_dir.parent == settings.runs_workspace
     assert result.artifacts.run_metadata.command == ["mock"]
+    assert result.visualization_source == "estimated_profile"
 
 
 def test_service_normalizes_solver_failures() -> None:

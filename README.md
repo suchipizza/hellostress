@@ -1,37 +1,44 @@
-# HelloStress FEA Copilot
+# FEA Copilot
 
-FEA Copilot is a narrow-scope structural simulation prototype that turns supported natural-language beam and plate prompts into structured specs, generated FEniCS scripts, quick estimates, and result summaries.
+[![CI workflow](https://img.shields.io/badge/CI-GitHub%20Actions%20workflow%20included-0A7E8C)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-pytest%20suite-informational)](tests)
+[![Release](https://img.shields.io/badge/release-v0.3.0-informational)](CHANGELOG.md)
+[![Docs](https://img.shields.io/badge/docs-in%20repo-1F6FEB)](docs/quickstart.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-success)](LICENSE)
 
-Phase 2 closed out the backend hardening round. Phase 3 and Phase 4 are now complete on `main`, including artifact inspection, workspace audit/reporting, policy-driven export, and retention workflows.
+FEA Copilot turns narrow, linear-elastic mechanical-analysis prompts into transparent, reproducible engineering workflows for first-pass beam, plate, bracket, and plate-with-hole checks.
 
-## Current Scope
+Current executable scope: beams and rectangular plates in `mock` and Docker modes, plus analytical `mock`-mode screening workflows for brackets and plates with central holes.
 
-This project is intentionally narrow right now.
+![FEA Copilot demo](assets/demo.gif)
 
-- Supported beam prompts must clearly include geometry, section size, and a load with units.
-- Supported plate prompts must clearly include rectangular plan dimensions, thickness, and pressure with units.
-- Mock mode provides analytical estimates.
-- Docker mode is the intended path for generated FEniCS execution.
-- Host-local execution is not a supported backend.
+## Why This Matters Now
 
-Unsupported or ambiguous prompts should fail clearly rather than return plausible nonsense.
+Mechanical engineers still spend time rebuilding the same first-pass checks from scratch: parse the problem, restate assumptions, estimate loads, wire a solver, then explain what happened. FEA Copilot packages that loop into a reproducible CLI and app workflow with explicit assumptions, persisted artifacts, and validation-oriented examples.
 
-## Quick Start
+## Show Me The Result
+
+```text
+$ feacopilot --prompt "Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load." --solver-mode mock --output json
+status: completed
+geometry: beam
+max_deflection: 3.000e-05 m
+max_stress: 9.000e+05 Pa
+artifacts: run_result.json, backend_status.json, backend_metadata.json, metrics.json
+```
+
+The `mock` path uses closed-form estimates for fast reproducible smoke tests. The Docker path runs generated DOLFINx scripts and is covered by a gated CI smoke test.
+
+## Try It In 60 Seconds
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install '.[dev]'
-streamlit run app.py
+python3 -m pip install -e '.[dev]'
+./examples/minimal/run.sh
 ```
 
-The default runtime uses the fast `mock` solver. To prepare Docker-backed execution:
-
-```bash
-docker pull dolfinx/dolfinx:v0.7.3
-```
-
-You can also run the service headlessly:
+If you only want the raw CLI:
 
 ```bash
 feacopilot \
@@ -40,145 +47,160 @@ feacopilot \
   --output json
 ```
 
-## Example Prompts
+## Minimal Example
 
-- `Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load.`
-- `Analyze a 0.5 m by 0.3 m aluminum plate 5 mm thick under a uniform pressure of 50 kPa.`
+`examples/minimal/prompt.txt`
 
-## Environment Variables
-
-- `OPENAI_API_KEY`: optional. Enables GPT-assisted parsing and summarization.
-- `OPENAI_MODEL`: optional model override for the OpenAI client.
-- `FEA_DEFAULT_SOLVER_MODE`: optional default solver mode for the UI and CLI. Supported values: `mock`, `docker`, `auto`.
-- `FEA_DEFAULT_MESH_DENSITY`: optional default mesh density for the UI and CLI. Supported range: `12` to `80`.
-- `FEA_DOCKER_IMAGE`: optional Docker image override for solver execution.
-- `FEA_SOLVER_TIMEOUT_SECONDS`: optional backend timeout override in seconds.
-- `FEA_RUNS_DIR`: optional workspace directory for generated runs and artifacts.
-
-You can place these in a local `.env` file.
-
-## Headless CLI
-
-The `feacopilot` console script runs the same service layer used by the app and writes the normal backend artifacts into the configured run workspace.
-
-Common examples:
-
-```bash
-feacopilot --prompt "Analyze a 0.5 m by 0.3 m aluminum plate 5 mm thick under a uniform pressure of 50 kPa."
-feacopilot --prompt-file prompt.txt --output json
+```text
+Simulate a 1 m long, 0.1 m thick steel cantilever beam with a 150 N downward tip load.
 ```
 
-CLI JSON output includes status, metrics, warnings, parsed spec details, and the paths to `run_result.json`, `backend_status.json`, `backend_metadata.json`, and `metrics.json`.
+Expected headline outputs:
 
-You can also inspect a completed run without re-executing it:
+- `status: completed`
+- `geometry: beam`
+- `max_deflection: 3.000e-05 m`
+- `max_stress: 9.000e+05 Pa`
+
+## Examples
+
+Supported now:
+
+- [Minimal CLI run](examples/minimal/README.md)
+- [Cantilever beam](examples/beam_cantilever/README.md)
+- [Simply supported beam](examples/simply_supported_beam/README.md)
+- [Rectangular plate under pressure](examples/plate_pressure/README.md)
+- [Bracket screening](examples/bracket_linear_elastic/README.md)
+- [Plate-with-hole screening](examples/plate_with_hole/README.md)
+- [Hand-calculation comparison](examples/hand_calc_comparison/README.md)
+
+## Validation
+
+Validation assets live under [`validation/`](validation):
+
+- [Analytical beam comparison](validation/analytical_beam/README.md): matches the current Euler-Bernoulli cantilever estimate used by `mock` mode.
+- [Public formula check](validation/public_formula_checks/README.md): compares the cantilever beam `mock` output against a readable hand calculation.
+- [Roark-style square-plate benchmark](validation/roark_formulas/README.md): compares the `mock` clamped-plate estimate to a cited classical thin-plate table.
+- [Mesh convergence study](validation/mesh_convergence/README.md): includes committed Docker-backed distributed-load cantilever beam convergence data and plots.
+- [Solver comparison intake](validation/solver_comparison/README.md): clearly marked scaffold, not a finished benchmark claim.
+
+Current validation summary:
+
+| Case | Type | Status |
+|---|---|---|
+| Cantilever analytical beam | analytical | committed |
+| Cantilever hand calculation | public formula check | committed |
+| Square clamped plate | cited formula comparison | committed |
+| Distributed-load beam convergence | Docker evidence | committed |
+| Solver comparison | cross-backend intake | scaffold |
+
+The repository does not claim external benchmark accuracy unless the comparison inputs, commands, reference source, and tolerance are committed alongside the case.
+
+## Technical Credibility
+
+- The parser is intentionally narrow and fails on unsupported or ambiguous prompts instead of guessing.
+- The CLI and Streamlit app share the same `SimulationService`, so examples and tests exercise the same orchestration path.
+- Every run writes a structured artifact bundle: `run_result.json`, `backend_status.json`, `backend_metadata.json`, logs, generated script, and metrics.
+- `mock` mode is fast and deterministic for smoke tests and analytical screening workflows; Docker mode is the intended path for generated DOLFINx execution of beam and rectangular-plate cases.
+- The test suite covers parsing, validation, script generation, CLI behavior, artifact inspection/export, visualization, and a gated Docker smoke path.
+
+## Project Scope
+
+In scope today:
+
+- Linear-elastic beam prompts
+- Linear-elastic rectangular plate prompts under pressure
+- Analytical bracket screening prompts
+- Analytical plate-with-hole tension screening prompts
+- Mock analytical estimates for reproducible local runs
+- Docker-backed generated DOLFINx execution for beams and rectangular plates
+- Artifact inspection, export, retention, and workspace policy reporting
+
+Not implemented yet:
+
+- Docker-backed bracket geometry
+- Docker-backed plate-with-hole geometry
+- Nonlinear behavior
+- Contact
+- Plasticity
+- Dynamics
+- Thermal-mechanical coupling
+
+## Assumptions And Limitations
+
+- Results are for educational and preliminary design workflows, not certified sign-off.
+- Beam prompts require a span, section size, and a load with units.
+- Plate prompts require rectangular plan dimensions, thickness, and pressure with units.
+- Bracket and plate-with-hole prompts currently run as analytical `mock`-mode screening workflows only.
+- Host-local solver execution is intentionally unsupported; use `mock`, `docker`, or `auto`.
+- The current `mock` path is an analytical estimator, not a full finite-element solve.
+
+## Install
 
 ```bash
-feacopilot --inspect-run-dir /path/to/run
-feacopilot --inspect-run-result /path/to/run/run_result.json --output json
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -e '.[dev]'
 ```
 
-You can audit, export, bulk export, or clean up retained runs as well:
-
-```bash
-feacopilot --report-workspace-policy --retention-days 14 --keep-latest 5
-feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
-feacopilot --export-workspace-runs --workspace /path/to/runs --export-output-dir ./workspace-exports
-feacopilot --cleanup-runs --retention-days 14 --keep-latest 5 --dry-run
-```
-
-## Local Development
-
-Run the checks used in this repository:
-
-```bash
-python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
-pytest -q
-```
-
-The Docker-backed smoke test is gated and should be run when backend orchestration or artifact contracts change:
+Optional Docker runtime:
 
 ```bash
 docker pull dolfinx/dolfinx:v0.7.3
-RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
 ```
 
-The main GitHub Actions test job also exercises the CLI artifact lifecycle in `mock` mode: run creation, inspection, workspace reporting, single-run export, workspace bulk export, and cleanup retention behavior.
+## Usage
 
-## Solver Backend Contract
+Run a prompt:
 
-The current service and backend path produces a structured solver artifact contract:
+```bash
+feacopilot --prompt-file examples/beam_cantilever/prompt.txt --solver-mode mock --output json
+```
 
-- `backend_mode`: resolved backend used for execution
-- `backend_status`: normalized backend status such as `succeeded`, `failed`, or `timed_out`
-- `run_dir`: working directory for the run
-- `script_path`: generated simulation script written for the run
-- `results_dir`: directory for solver outputs
-- `metrics_path`: expected `metrics.json` path
-- `backend_status_path`: JSON file describing backend execution status
-- `backend_metadata_path`: JSON file describing backend metadata such as Docker image/version
-- `run_metadata`: structured command, exit code, timeout, and stdout/stderr diagnostics
-- `runtime_metadata`: container lifecycle metadata including container id, timing, state, and cleanup status
-- `generated_files`: files actually produced by the backend
-- `warnings`: contract or backend warnings surfaced to the application layer
+Inspect a finished run:
 
-The service layer also writes `run_result.json`, which normalizes:
+```bash
+feacopilot --inspect-run-dir /path/to/run
+```
 
-- final application status
-- backend execution status
-- backend status and metadata payloads
-- metrics source
-- whether analytical fallback was used
-- warning aggregation across backend and post-processing
+Audit, export, or clean up a workspace:
 
-As of Phase 4, `backend_status.json`, `backend_metadata.json`, and `run_result.json` also carry an explicit `schema_version` field so automation can validate the contract before consuming a run.
+```bash
+feacopilot --report-workspace-policy --workspace /path/to/runs --retention-days 14 --keep-latest 5
+feacopilot --export-run-dir /path/to/run --export-output run-artifacts.zip
+feacopilot --cleanup-runs --workspace /path/to/runs --retention-days 14 --keep-latest 5 --dry-run
+```
 
-The current compatibility policy is strict and explicit:
+## Docs
 
-- supported artifact bundles must declare a `schema_version` within the currently supported range
-- the CLI inspection path validates referenced files and checks that embedded payloads match the referenced backend artifact files
-- the CLI inspection path now also emits triage severity, issue codes, backend log context, and suggested actions for degraded bundles
-- inspection JSON now includes machine-readable quality-gate, export, and promotion policy decisions for automation
-- unsupported schema versions fail fast instead of being interpreted optimistically
-- workspace policy reporting exposes per-run readiness and aggregate counts across a run workspace
-- the CLI export path writes a zip archive of the validated bundle for handoff or archival, but now blocks by default when the quality gate fails unless an explicit override is supplied
-- the CLI workspace export path packages every export-ready run in a workspace into a chosen output directory and reports blocked, skipped, or failed runs explicitly
-- export archives now include `export-manifest.json` with per-file SHA-256 hashes and bundle metadata
-- the CLI cleanup path applies retention rules to the configured run workspace, supports dry-run previews, and exposes summary counts in JSON output
+- [Quickstart](docs/quickstart.md)
+- [Architecture](docs/architecture.md)
+- [Assumptions](docs/assumptions.md)
+- [Examples](docs/examples.md)
+- [Validation](docs/validation.md)
+- [Benchmark Contribution Loop](docs/benchmark.md)
+- [Contributing Examples And Benchmarks](docs/contributing_examples.md)
+- [LLM Quickstart](docs/llm-quickstart.md)
+- [Repo Map](docs/repo-map.md)
+- [Repository Settings](docs/repository-settings.md)
+- [Teaching notebook](examples/hand_calc_comparison/hand_calc_walkthrough.ipynb)
+- [GitHub Launch Checklist](docs/github_launch_checklist.md)
+- [Release Checklist](docs/release_checklist.md)
+- [Developer Guide](docs/developer-guide.md)
+- [Artifact Lifecycle Runbook](docs/artifact-lifecycle-runbook.md)
 
 ## Contributing
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
 
-Relevant docs:
+Fork this repo to add your own benchmark, solver adapter, or engineering example.
 
-- [docs/user-guide.md](docs/user-guide.md)
-- [docs/developer-guide.md](docs/developer-guide.md)
-- [docs/artifact-lifecycle-runbook.md](docs/artifact-lifecycle-runbook.md)
-- [docs/phase-2-plan.md](docs/phase-2-plan.md)
-- [docs/phase-3-plan.md](docs/phase-3-plan.md)
-- [docs/phase-4-plan.md](docs/phase-4-plan.md)
+Good entry points:
 
-## Repository Layout
+- add a sourced validation case under `validation/`
+- turn the bracket scaffold into a real adapter-backed example
+- improve error messages for unsupported prompts
+- add a Docker-backed mesh convergence plot with committed evidence
+- extend docs around assumptions and solver limitations
 
-```
-feacopilot/
-├── app.py
-├── fea_engine/
-├── templates/
-├── tests/
-├── docs/
-├── requirements.txt
-├── requirements-dev.txt
-├── CONTRIBUTING.md
-└── README.md
-```
-
-## Phase Status
-
-- Phase 2 is complete on `main`.
-- Phase 3 is complete on `main`.
-- Phase 4 is complete on `main`.
-
-## Disclaimer
-
-Results are for educational and preliminary design purposes only and are **not** certified for production use.
+The current roadmap and issue candidates live in [ROADMAP.md](ROADMAP.md).
