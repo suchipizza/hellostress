@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FEA Copilot validation case manifest",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "category",
+    "physics",
+    "geometry",
+    "reference",
+    "expected",
+    "run"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "physics": {
+      "type": "object",
+      "required": [
+        "regime",
+        "strain",
+        "material"
+      ],
+      "properties": {
+        "regime": {
+          "type": "string"
+        },
+        "strain": {
+          "type": "string"
+        },
+        "material": {
+          "type": "string"
+        }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "type",
+        "source"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "expected": {
+      "type": "object"
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

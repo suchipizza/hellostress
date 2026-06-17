@@ -6,3 +6,5 @@ __pycache__/
 feacopilot.egg-info/
 tmp-runs/
 examples/**/output/
+validation/analytical_beam/output/
+validation/public_formula_checks/**/output/

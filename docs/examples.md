@@ -37,7 +37,7 @@ Bracket and plate-with-hole examples are supported in analytical `mock` mode, bu
 
 ## How To Add A New Example
 
-- copy a nearby example directory or start from `templates/new_benchmark_case/`
+- copy a nearby example directory or start from `templates/new_example_case/`
 - include `README.md`, `prompt.txt`, `run.sh`, and an expected-output artifact
 - keep the command reproducible from an editable install
 - add a validation note or a clear `TODO` explaining what evidence is still missing

@@ -24,7 +24,7 @@ jobs:
           pip install '.[dev]'
 
       - name: Compile Python sources
-        run: python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py tools/*.py validation/mesh_convergence/*.py validation/roark_formulas/*.py
+        run: python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py tools/*.py validation/public_formula_checks/*.py validation/mesh_convergence/*.py validation/roark_formulas/*.py
 
       - name: Run tests
         run: pytest -q
@@ -42,6 +42,9 @@ jobs:
 
       - name: Run analytical benchmark smoke test
         run: ./validation/roark_formulas/run.sh
+
+      - name: Run validation suite
+        run: make validate
 
       - name: Run CLI artifact workflow smoke test
         run: |

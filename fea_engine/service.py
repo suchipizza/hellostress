@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import plotly.graph_objects as go
 
@@ -36,6 +36,8 @@ class SimulationRunResult:
     result_schema_path: Path
     metrics: dict[str, float]
     figure: go.Figure
+    pyvista_image: Any | None
+    visualization_source: str
     summary: str
     solver_mode: str
 
@@ -88,9 +90,19 @@ class SimulationService:
         self._emit(progress_callback, "Post-processing results…")
         metrics_result = self.postprocessor.collect_metrics(spec, artifacts)
         metrics = metrics_result.metrics
-        figure = self.visualizer.build_figure(spec, metrics)
+        if hasattr(self.visualizer, "build_visualization"):
+            visualization = self.visualizer.build_visualization(spec, metrics, artifacts)
+            figure = visualization.plotly_figure
+            pyvista_image = visualization.pyvista_image
+            visualization_source = visualization.source
+            visualization_warnings = visualization.warnings
+        else:
+            figure = self.visualizer.build_figure(spec, metrics)
+            pyvista_image = None
+            visualization_source = "estimated_profile"
+            visualization_warnings = []
         summary = self.summarizer.summarize(spec, metrics)
-        warnings = [*artifacts.warnings, *metrics_result.warnings]
+        warnings = [*artifacts.warnings, *metrics_result.warnings, *visualization_warnings]
         status = "completed_with_fallback" if metrics_result.fallback_used else "completed"
         result_schema_path = self._write_result_schema(
             artifacts=artifacts,
@@ -109,6 +121,8 @@ class SimulationService:
             result_schema_path=result_schema_path,
             metrics=metrics,
             figure=figure,
+            pyvista_image=pyvista_image,
+            visualization_source=visualization_source,
             summary=summary,
             solver_mode=artifacts.backend_mode,
         )

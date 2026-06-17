@@ -79,8 +79,20 @@ Supported now:
 Validation assets live under [`validation/`](validation):
 
 - [Analytical beam comparison](validation/analytical_beam/README.md): matches the current Euler-Bernoulli cantilever estimate used by `mock` mode.
+- [Public formula check](validation/public_formula_checks/README.md): compares the cantilever beam `mock` output against a readable hand calculation.
 - [Roark-style square-plate benchmark](validation/roark_formulas/README.md): compares the `mock` clamped-plate estimate to a cited classical thin-plate table.
 - [Mesh convergence study](validation/mesh_convergence/README.md): includes committed Docker-backed distributed-load cantilever beam convergence data and plots.
+- [Solver comparison intake](validation/solver_comparison/README.md): clearly marked scaffold, not a finished benchmark claim.
+
+Current validation summary:
+
+| Case | Type | Status |
+|---|---|---|
+| Cantilever analytical beam | analytical | committed |
+| Cantilever hand calculation | public formula check | committed |
+| Square clamped plate | cited formula comparison | committed |
+| Distributed-load beam convergence | Docker evidence | committed |
+| Solver comparison | cross-backend intake | scaffold |
 
 The repository does not claim external benchmark accuracy unless the comparison inputs, commands, reference source, and tolerance are committed alongside the case.
 
@@ -163,18 +175,25 @@ feacopilot --cleanup-runs --workspace /path/to/runs --retention-days 14 --keep-l
 
 - [Quickstart](docs/quickstart.md)
 - [Architecture](docs/architecture.md)
+- [Assumptions](docs/assumptions.md)
 - [Examples](docs/examples.md)
 - [Validation](docs/validation.md)
 - [Benchmark Contribution Loop](docs/benchmark.md)
 - [Contributing Examples And Benchmarks](docs/contributing_examples.md)
+- [LLM Quickstart](docs/llm-quickstart.md)
+- [Repo Map](docs/repo-map.md)
+- [Repository Settings](docs/repository-settings.md)
 - [Teaching notebook](examples/hand_calc_comparison/hand_calc_walkthrough.ipynb)
 - [GitHub Launch Checklist](docs/github_launch_checklist.md)
+- [Release Checklist](docs/release_checklist.md)
 - [Developer Guide](docs/developer-guide.md)
 - [Artifact Lifecycle Runbook](docs/artifact-lifecycle-runbook.md)
 
 ## Contributing
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+
+Fork this repo to add your own benchmark, solver adapter, or engineering example.
 
 Good entry points:
 

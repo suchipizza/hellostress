@@ -21,14 +21,13 @@ docker pull dolfinx/dolfinx:v0.7.3
 ## Run Tests
 
 ```bash
-python3 -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py tools/*.py validation/mesh_convergence/*.py validation/roark_formulas/*.py
-pytest -q
-python3 tools/check_markdown_links.py
+make test
 ```
 
 Docker smoke path:
 
 ```bash
+make validate-docker
 RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker-smoke
 ```
 
@@ -44,6 +43,13 @@ Or directly:
 feacopilot --prompt-file examples/minimal/prompt.txt --solver-mode mock --output json
 ```
 
+## Run Validation
+
+```bash
+make validate
+python3 tools/run_validation.py --list
+```
+
 ## Project Structure
 
 - `fea_engine/`: parser, validation, service orchestration, solver integration, artifact handling, and visualization.
@@ -51,6 +57,7 @@ feacopilot --prompt-file examples/minimal/prompt.txt --solver-mode mock --output
 - `examples/`: runnable examples and extension stubs.
 - `validation/`: committed comparisons, benchmark intake scaffolds, and convergence workflows.
 - `docs/`: quickstart, architecture, validation, launch, and contribution docs.
+- `docs/repo-map.md`: concise orientation file for agents and maintainers.
 - `.github/`: CI plus issue and PR templates.
 - `tests/`: unit, golden, CLI, artifact, visualization, and gated Docker smoke tests.
 

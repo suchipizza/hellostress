@@ -29,10 +29,9 @@ python3 -m pip install -e '.[dev]'
 Run these before opening a PR:
 
 ```bash
-python3 -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py tools/*.py validation/mesh_convergence/*.py validation/roark_formulas/*.py
-pytest -q
-python3 tools/check_markdown_links.py
-./examples/smoke_test.sh
+make test
+make examples
+make validate
 ```
 
 Run the Docker smoke path when you touch backend orchestration, script templates, or validation workflows that depend on DOLFINx:
@@ -54,6 +53,7 @@ RUN_DOCKER_SMOKE=1 pytest -q tests/test_integration_docker_smoke.py --run-docker
 ## Example And Benchmark Contributions
 
 - Follow the structure in `examples/` and `validation/`.
+- Prefer the starter scaffolds under `templates/new_example_case/`, `templates/new_validation_case/`, `templates/new_solver_adapter/`, and `templates/new_exporter/`.
 - Every new case needs a reproducible command and a written assumptions section.
 - Benchmark cases need a reference result, tolerance, and source citation if applicable.
 - If a case is only scaffolded, mark it `TODO` and describe what evidence is missing.

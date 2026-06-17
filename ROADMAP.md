@@ -1,43 +1,43 @@
 # Roadmap
 
-## Current Priorities
+## v0.1 — Open-source launch readiness
 
-- keep the beam and rectangular-plate workflows stable and reproducible
-- expand validation coverage before expanding solver scope
-- make extension points for new geometries and adapters easier to contribute safely
-- prepare the repository for a public open-source launch with credible examples and issue intake
+- landing-page README
+- minimal example and example smoke coverage
+- validation runner and current benchmark evidence
+- contribution docs, issue templates, and agent guidance
+- CI, launch drafts, and devcontainer onboarding
 
-## Planned Workstreams
+## v0.2 — Benchmark suite
 
-### Validation
+- extend the rectangular-plate reference set beyond the square clamped case
+- add solver-comparison cases on the same supported beam prompt
+- deepen mesh-convergence interpretation and comparison notes
+- add at least one more cited validation case with a committed tolerance
 
-- extend the sourced rectangular-plate reference set beyond the square clamped case
-- add interpretation guidance for the committed Docker-backed mesh convergence data set
-- add solver-comparison intake for the same beam case across backends
+## v0.3 — Education layer
 
-### Examples
+- expand the hand-calculation notebook and teaching docs
+- add a terminology and assumptions glossary
+- add more beginner-friendly boundary-condition and loading examples
 
-- turn the bracket scaffold into a real supported workflow
-- add a Docker-backed follow-through for the simply supported beam teaching example
-- add a pressure-vessel or thermal-expansion benchmark only when a validated reference is committed
+## v0.4 — Solver and exporter ecosystem
 
-### Tooling
-
-- improve CLI error messages for unsupported prompt geometry
-- add docs checks or lightweight link validation in CI
-- add optional devcontainer or Codespaces setup for faster onboarding
+- make bracket support backend-real instead of screening-only
+- make plate-with-hole support backend-real instead of screening-only
+- add adapter validation fixtures and exporter smoke coverage
 
 ## Good First Issues
 
-- Add `examples/simply_supported_beam/` with `prompt.txt`, `run.sh`, README, and expected outputs.
-- Add a sourced validation case under `validation/roark_formulas/` for a rectangular plate example with a committed tolerance.
-- Add a script that generates a mesh-convergence CSV and plot for the cantilever beam Docker path.
-- Improve the unsupported-geometry error so bracket prompts fail with a more actionable extension hint.
-- Add a teaching notebook that walks through the hand-calculation beam comparison already documented in the repo.
-- Add a contributor checklist for screenshot or terminal-demo regeneration in `assets/`.
-- Add a workspace-policy example that demonstrates export-ready versus blocked artifact bundles.
-- Add a `docs/assumptions.md` page that centralizes material, load, and solver assumptions from scattered docs.
-- Add tests for additional beam boundary-condition phrasing that should still map to `fixed` or `roller`.
-- Add a solver-adapter template test fixture that validates expected artifact keys for a new backend.
-- Add a `plate_under_pressure` validation case with committed expected metrics derived from the current analytical estimator.
-- Add a lightweight docs lint step that fails CI on missing local markdown links.
+- Add a sourced rectangular-plate validation case under `validation/roark_formulas/`.
+- Add interpretation guidance for the committed Docker mesh-convergence data set.
+- Add a same-prompt solver comparison intake case under `validation/solver_comparison/`.
+- Improve unsupported-geometry error messages with clearer extension hints.
+- Add a contributor checklist for regenerating screenshot and terminal-demo assets.
+- Add a workspace-policy example that demonstrates export-ready versus blocked bundles.
+- Add tests for more beam boundary-condition phrasing that should still map to `fixed` or `roller`.
+- Add a solver-adapter template fixture that validates expected artifact keys for a new backend.
+- Add a glossary page for assumptions and common FEA terminology.
+- Add a beginner-friendly notebook that explains the simply supported beam example.
+- Add a rectangular plate pressure validation case derived from a committed public reference.
+- Add exporter scaffolding tests once a first exporter is introduced.

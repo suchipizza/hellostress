@@ -1,0 +1,26 @@
+{
+  "id": "TODO_case_id",
+  "title": "TODO case title",
+  "category": "TODO category",
+  "physics": {
+    "regime": "linear_elastic",
+    "strain": "small_strain",
+    "material": "TODO"
+  },
+  "geometry": {
+    "type": "TODO"
+  },
+  "reference": {
+    "type": "TODO",
+    "source": "TODO"
+  },
+  "expected": {
+    "TODO_metric": {
+      "value": 0.0,
+      "tolerance_percent": 0.0
+    }
+  },
+  "run": {
+    "command": "python3 run.py"
+  }
+}

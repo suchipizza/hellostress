@@ -8,6 +8,14 @@ source .venv/bin/activate
 python3 -m pip install -e '.[dev]'
 ```
 
+Or in Codespaces / a compatible devcontainer:
+
+```bash
+python3 -m pip install -e '.[dev]'
+make test
+make example
+```
+
 Optional Docker backend:
 
 ```bash
@@ -24,6 +32,15 @@ That script runs:
 
 ```bash
 feacopilot --prompt-file examples/minimal/prompt.txt --solver-mode mock --output json
+```
+
+## Make Targets
+
+```bash
+make test
+make example
+make examples
+make validate
 ```
 
 ## Run A Beam Example
