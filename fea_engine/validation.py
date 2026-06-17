@@ -46,7 +46,7 @@ class SimulationSpecValidator:
                 raise SpecValidationError("Beam section height and width must be positive.")
             if any(load.load_type == LoadType.PRESSURE for load in spec.loads):
                 raise SpecValidationError("Beam simulations do not support pressure loads.")
-        else:
+        elif spec.geometry == GeometryType.PLATE:
             if spec.plate_dimensions is None:
                 raise SpecValidationError("Plate simulations require plate dimensions.")
             if spec.beam_section is not None:
@@ -55,5 +55,28 @@ class SimulationSpecValidator:
                 raise SpecValidationError("Plate width and thickness must be positive.")
             if any(load.load_type != LoadType.PRESSURE for load in spec.loads):
                 raise SpecValidationError("Plate simulations currently support pressure loads only.")
+        elif spec.geometry == GeometryType.BRACKET:
+            if spec.beam_section is None:
+                raise SpecValidationError("Bracket screening workflows require thickness and width dimensions.")
+            if spec.beam_section.height <= 0 or spec.beam_section.width <= 0:
+                raise SpecValidationError("Bracket thickness and width must be positive.")
+            if any(load.load_type == LoadType.PRESSURE for load in spec.loads):
+                raise SpecValidationError("Bracket screening workflows do not support pressure loads.")
+        else:
+            if spec.plate_dimensions is None:
+                raise SpecValidationError("Plate-with-hole workflows require plate dimensions.")
+            if spec.beam_section is not None:
+                raise SpecValidationError("Plate-with-hole workflows cannot include beam section dimensions.")
+            if spec.plate_dimensions.width <= 0 or spec.plate_dimensions.thickness <= 0:
+                raise SpecValidationError("Plate-with-hole width and thickness must be positive.")
+            hole_diameter = spec.metadata.get("hole_diameter_m")
+            if not isinstance(hole_diameter, (int, float)) or hole_diameter <= 0:
+                raise SpecValidationError("Plate-with-hole workflows require a positive hole diameter in metadata.")
+            if hole_diameter >= min(spec.length, spec.plate_dimensions.width):
+                raise SpecValidationError("Hole diameter must be smaller than the plate spans.")
+            if any(load.load_type != LoadType.PRESSURE for load in spec.loads):
+                raise SpecValidationError(
+                    "Plate-with-hole analytical workflows currently support far-field tension expressed with pressure units only."
+                )
 
         return spec

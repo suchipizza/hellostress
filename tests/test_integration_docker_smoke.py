@@ -213,3 +213,29 @@ def test_generated_dolfinx_beam_script_runs_in_docker(tmp_path: Path) -> None:
     assert (artifacts.results_dir / "stress.xdmf").exists()
     assert metrics_payload["max_deflection"] >= 0.0
     assert metrics_payload["max_stress"] >= 0.0
+
+
+def test_beam_tip_load_scaling_changes_metrics_in_docker(tmp_path: Path) -> None:
+    if not docker_runtime_available():
+        pytest.skip("Docker runtime is not available for the integration smoke test.")
+
+    light_spec = build_beam_spec()
+    light_spec.mesh_density = 8
+    heavy_spec = build_beam_spec()
+    heavy_spec.mesh_density = 8
+    heavy_spec.loads[0].magnitude = 300.0
+
+    solver = FenicsSolver(mode="docker", workspace=tmp_path)
+    generator = FenicsScriptGenerator()
+
+    light_artifacts = solver.run(light_spec, generator.render(light_spec))
+    heavy_artifacts = solver.run(heavy_spec, generator.render(heavy_spec))
+
+    light_metrics = json.loads(light_artifacts.metrics_path.read_text(encoding="utf-8"))
+    heavy_metrics = json.loads(heavy_artifacts.metrics_path.read_text(encoding="utf-8"))
+
+    assert light_metrics["max_deflection"] > 0.0
+    assert heavy_metrics["max_deflection"] > light_metrics["max_deflection"]
+    assert heavy_metrics["max_stress"] > light_metrics["max_stress"]
+    assert heavy_metrics["max_deflection"] / light_metrics["max_deflection"] == pytest.approx(2.0, rel=0.25)
+    assert heavy_metrics["max_stress"] / light_metrics["max_stress"] == pytest.approx(2.0, rel=0.25)

@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose a scoped improvement to supported workflows, docs, or contributor tooling.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or contributor problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Keep this concrete. Mention example directories, validation cases, or modules if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Validation or evidence
+      description: What benchmark, example, or workflow would prove the feature is useful?

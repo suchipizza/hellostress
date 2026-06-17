@@ -1,0 +1,6 @@
+{
+  "geometry": "beam",
+  "max_deflection_m": 0.00003,
+  "max_stress_pa": 900000.0,
+  "tolerance": "exact match in current mock estimator"
+}

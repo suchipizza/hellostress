@@ -32,7 +32,7 @@ def sigma(field):
     return 2.0 * mu * epsilon(field) + lmbda * ufl.tr(epsilon(field)) * ufl.Identity(len(field))
 
 
-body_force = fem.Constant(msh, PETSc.ScalarType((0.0, 50000.0)))
+body_force = fem.Constant(msh, PETSc.ScalarType((0.0, -10000000.0)))
 a = ufl.inner(sigma(u), epsilon(v)) * ufl.dx
 L_form = ufl.inner(body_force, v) * ufl.dx
 
@@ -60,7 +60,8 @@ vm_out_expr = fem.Expression(sigma_vm, W_out.element.interpolation_points())
 vm_out = fem.Function(W_out)
 vm_out.interpolate(vm_out_expr)
 
-local_max_deflection = np.max(np.abs(w.x.array)) if w.x.array.size else 0.0
+disp_values = w.x.array.real.reshape((-1, msh.geometry.dim)) if w.x.array.size else np.zeros((0, msh.geometry.dim))
+local_max_deflection = np.max(np.linalg.norm(disp_values, axis=1)) if disp_values.size else 0.0
 local_max_stress = np.max(vm_h.x.array.real) if vm_h.x.array.size else 0.0
 max_deflection = msh.comm.allreduce(local_max_deflection, op=MPI.MAX)
 max_stress = msh.comm.allreduce(local_max_stress, op=MPI.MAX)

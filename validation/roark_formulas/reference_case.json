@@ -1,0 +1,14 @@
+{
+  "source": "Timoshenko and Woinowsky-Krieger, Theory of Plates and Shells, Table 35 (nu = 0.3)",
+  "geometry": "square clamped plate",
+  "short_span_m": 0.5,
+  "thickness_m": 0.005,
+  "pressure_pa": 50000.0,
+  "youngs_modulus_pa": 200000000000.0,
+  "poisson_ratio": 0.3,
+  "deflection_coefficient": 0.00126,
+  "max_moment_coefficient": 0.0513,
+  "expected_deflection_m": 0.0017199,
+  "expected_stress_pa": 153900000.0,
+  "tolerance_relative": 0.001
+}

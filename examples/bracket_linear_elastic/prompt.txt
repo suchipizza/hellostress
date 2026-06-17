@@ -1,0 +1,1 @@
+Analyze a steel L-bracket with a 120 mm arm, 40 mm wide and 10 mm thick, fixed at the base with a 2 kN downward load at the free hole.

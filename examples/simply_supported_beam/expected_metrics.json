@@ -1,0 +1,8 @@
+{
+  "status": "completed",
+  "solver_mode": "mock",
+  "geometry": "beam",
+  "boundary_condition": "roller",
+  "max_deflection_m": 0.002,
+  "max_stress_pa": 30000000.0
+}

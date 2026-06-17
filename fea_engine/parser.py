@@ -45,9 +45,9 @@ class PromptParser:
 
     def _parse_with_llm(self, prompt: str) -> SimulationSpec:
         instructions = (
-            "Convert the FEA description into JSON with keys: geometry_type (beam|plate), "
+            "Convert the FEA description into JSON with keys: geometry_type (beam|plate|bracket|plate_with_hole), "
             "length_m, beam_height_m, beam_width_m, plate_width_m, plate_thickness_m, "
-            "material, boundary_condition (fixed|roller), load_type (point|distributed|pressure), "
+            "hole_diameter_m, material, boundary_condition (fixed|roller), load_type (point|distributed|pressure), "
             "load_magnitude_N, load_direction, load_location_relative. Use SI units. "
             "For pressure loads, return Pascals in load_magnitude_N."
         )
@@ -62,6 +62,7 @@ class PromptParser:
             "beam_width_m",
             "plate_width_m",
             "plate_thickness_m",
+            "hole_diameter_m",
             "height_m",
             "width_m",
             "thickness_m",
@@ -106,7 +107,7 @@ class PromptParser:
                 loads=[load_case],
                 material=material,
             )
-        else:
+        elif geometry == GeometryType.PLATE:
             plate_width = self._first_present(data, ["plate_width_m", "width_m"])
             plate_thickness = self._first_present(
                 data,
@@ -120,6 +121,43 @@ class PromptParser:
                 boundary_condition=str(data.get("boundary_condition", "fixed")),
                 loads=[load_case],
                 material=material,
+            )
+        elif geometry == GeometryType.BRACKET:
+            bracket_thickness = self._first_present(data, ["beam_height_m", "height_m", "thickness_m"])
+            bracket_width = self._first_present(data, ["beam_width_m", "width_m"], fallback=bracket_thickness)
+            spec = SimulationSpec(
+                prompt=prompt,
+                geometry=geometry,
+                length=float(data.get("length_m", 0.0)),
+                beam_section=BeamSection(height=bracket_thickness, width=bracket_width),
+                boundary_condition=str(data.get("boundary_condition", "fixed")),
+                loads=[load_case],
+                material=material,
+                metadata={
+                    "analysis_mode": "analytical_screening",
+                    "approximation": "cantilever strip bracket approximation",
+                },
+            )
+        else:
+            plate_width = self._first_present(data, ["plate_width_m", "width_m"])
+            plate_thickness = self._first_present(
+                data,
+                ["plate_thickness_m", "thickness_m", "height_m"],
+            )
+            hole_diameter = self._first_present(data, ["hole_diameter_m"])
+            spec = SimulationSpec(
+                prompt=prompt,
+                geometry=geometry,
+                length=float(data.get("length_m", 0.0)),
+                plate_dimensions=PlateDimensions(width=plate_width, thickness=plate_thickness),
+                boundary_condition=str(data.get("boundary_condition", "fixed")),
+                loads=[load_case],
+                material=material,
+                metadata={
+                    "analysis_mode": "analytical_screening",
+                    "hole_diameter_m": hole_diameter,
+                    "approximation": "Kirsch-style wide-plate tension screening",
+                },
             )
 
         return self.validator.validate(spec)
@@ -157,7 +195,7 @@ class PromptParser:
                 loads=[load_case],
                 material=material,
             )
-        else:
+        elif geometry == GeometryType.PLATE:
             plate_length, plate_width = self._extract_plate_span(tokens)
             plate_thickness = self._extract_required_dimension(
                 tokens,
@@ -173,15 +211,69 @@ class PromptParser:
                 loads=[load_case],
                 material=material,
             )
+        elif geometry == GeometryType.BRACKET:
+            bracket_thickness = self._extract_required_dimension(
+                tokens,
+                ["thick", "thickness"],
+                "bracket thickness",
+            )
+            bracket_width = self._extract_required_dimension(
+                tokens,
+                ["wide", "width"],
+                "bracket width",
+            )
+            spec = SimulationSpec(
+                prompt=prompt,
+                geometry=geometry,
+                length=self._extract_bracket_length(tokens),
+                beam_section=BeamSection(height=bracket_thickness, width=bracket_width),
+                boundary_condition=boundary,
+                loads=[load_case],
+                material=material,
+                metadata={
+                    "analysis_mode": "analytical_screening",
+                    "approximation": "cantilever strip bracket approximation",
+                },
+            )
+        else:
+            plate_length, plate_width = self._extract_plate_span(tokens)
+            plate_thickness = self._extract_required_dimension(
+                tokens,
+                ["thick", "thickness"],
+                "plate thickness",
+            )
+            hole_diameter = self._extract_required_dimension(
+                tokens,
+                ["hole", "diameter"],
+                "hole diameter",
+            )
+            spec = SimulationSpec(
+                prompt=prompt,
+                geometry=geometry,
+                length=plate_length,
+                plate_dimensions=PlateDimensions(width=plate_width, thickness=plate_thickness),
+                boundary_condition=boundary,
+                loads=[load_case],
+                material=material,
+                metadata={
+                    "analysis_mode": "analytical_screening",
+                    "hole_diameter_m": hole_diameter,
+                    "approximation": "Kirsch-style wide-plate tension screening",
+                },
+            )
 
         return self.validator.validate(spec)
 
     def _detect_geometry(self, tokens: str) -> GeometryType:
+        if "bracket" in tokens:
+            return GeometryType.BRACKET
+        if "plate" in tokens and re.search(r"\b(hole|cutout|cut-out|aperture|opening)\b", tokens):
+            return GeometryType.PLATE_WITH_HOLE
         if "beam" in tokens:
             return GeometryType.BEAM
         if "plate" in tokens:
             return GeometryType.PLATE
-        raise PromptParseError("Prompt must mention either a beam or a plate.")
+        raise PromptParseError("Prompt must mention a supported geometry such as a beam, plate, bracket, or plate with a hole.")
 
     def _detect_material(self, tokens: str) -> MaterialSpec:
         lowered = (tokens or "").lower()
@@ -205,6 +297,8 @@ class PromptParser:
         return LoadType.POINT
 
     def _detect_load_direction(self, tokens: str) -> str:
+        if "tension" in tokens or "axial" in tokens or "pull" in tokens:
+            return "+x"
         if "upward" in tokens or "up " in tokens:
             return "+y"
         if "down" in tokens or "downward" in tokens:
@@ -217,8 +311,12 @@ class PromptParser:
         geometry: GeometryType,
         load_type: LoadType,
     ) -> Optional[float]:
-        if geometry != GeometryType.BEAM or load_type == LoadType.PRESSURE:
+        if geometry not in {GeometryType.BEAM, GeometryType.BRACKET} or load_type == LoadType.PRESSURE:
             return None
+        if geometry == GeometryType.BRACKET and (
+            "free hole" in tokens or "free end" in tokens or "loaded hole" in tokens
+        ):
+            return 1.0
         if "tip" in tokens or "cantilever" in tokens or "end load" in tokens:
             return 1.0
         if "midspan" in tokens or "center" in tokens or "centre" in tokens:
@@ -235,6 +333,15 @@ class PromptParser:
         if all_dimensions:
             return all_dimensions[0]
         raise PromptParseError("Could not determine the beam length from the prompt.")
+
+    def _extract_bracket_length(self, tokens: str) -> float:
+        explicit = self._extract_optional_dimension(tokens, ["arm", "leg", "reach", "length", "long"])
+        if explicit is not None:
+            return explicit
+        all_dimensions = self._extract_all_dimensions(tokens)
+        if all_dimensions:
+            return all_dimensions[0]
+        raise PromptParseError("Could not determine the bracket arm length from the prompt.")
 
     def _extract_plate_span(self, tokens: str) -> tuple[float, float]:
         pair = self._extract_pair(tokens)

@@ -1,0 +1,1 @@
+Analyze a simply supported 2 m long steel beam 50 mm thick and 80 mm wide with a 2 kN downward midspan load.

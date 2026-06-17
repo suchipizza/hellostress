@@ -1,0 +1,7 @@
+{
+  "status": "completed",
+  "solver_mode": "mock",
+  "geometry": "bracket",
+  "max_deflection_m": 0.001728,
+  "max_stress_pa": 360000000.0
+}

@@ -24,10 +24,24 @@ jobs:
           pip install '.[dev]'
 
       - name: Compile Python sources
-        run: python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py
+        run: python -m py_compile app.py fea_engine/*.py templates/*.py tests/*.py tools/*.py validation/mesh_convergence/*.py validation/roark_formulas/*.py
 
       - name: Run tests
         run: pytest -q
+
+      - name: Packaging sanity check
+        run: |
+          python -c "import importlib.metadata as md; assert md.version('feacopilot') == '0.3.0'"
+          feacopilot --help >/dev/null
+
+      - name: Check markdown links
+        run: python3 tools/check_markdown_links.py
+
+      - name: Run example smoke tests
+        run: ./examples/smoke_test.sh
+
+      - name: Run analytical benchmark smoke test
+        run: ./validation/roark_formulas/run.sh
 
       - name: Run CLI artifact workflow smoke test
         run: |

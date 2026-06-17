@@ -1,0 +1,47 @@
+{
+  "case": "distributed-load cantilever beam docker mesh convergence",
+  "mesh_densities": [
+    8,
+    12,
+    16,
+    24,
+    32
+  ],
+  "results": [
+    {
+      "mesh_density": 8,
+      "max_deflection": 2.6859632017273294e-07,
+      "max_stress": 27820.723666207014,
+      "deflection_change_ratio": 0.0,
+      "stress_change_ratio": 0.0
+    },
+    {
+      "mesh_density": 12,
+      "max_deflection": 1.8422106202874118e-07,
+      "max_stress": 26929.590009094725,
+      "deflection_change_ratio": 0.31413408080099703,
+      "stress_change_ratio": 0.03203128961719717
+    },
+    {
+      "mesh_density": 16,
+      "max_deflection": 1.6368743950720426e-07,
+      "max_stress": 27826.55036550826,
+      "deflection_change_ratio": 0.11146186161022878,
+      "stress_change_ratio": 0.033307612782467626
+    },
+    {
+      "mesh_density": 24,
+      "max_deflection": 6.745359372638043e-08,
+      "max_stress": 19081.82920028108,
+      "deflection_change_ratio": 0.5879122189860411,
+      "stress_change_ratio": 0.3142581832948467
+    },
+    {
+      "mesh_density": 32,
+      "max_deflection": 3.858791840228487e-08,
+      "max_stress": 15818.185802287086,
+      "deflection_change_ratio": 0.42793383909516564,
+      "stress_change_ratio": 0.17103409551249527
+    }
+  ]
+}

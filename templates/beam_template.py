@@ -32,13 +32,30 @@ def sigma(field):
     return 2.0 * mu * epsilon(field) + lmbda * ufl.tr(epsilon(field)) * ufl.Identity(len(field))
 
 
-load_density = fem.Constant(msh, PETSc.ScalarType((0.0, {{ load_density }})))
 a = ufl.inner(sigma(u), epsilon(v)) * ufl.dx
-L_form = ufl.inner(load_density, v) * ufl.dx
-
-facets = mesh.locate_entities_boundary(msh, 1, lambda x: np.isclose(x[0], 0.0))
-dofs = fem.locate_dofs_topological(V, 1, facets)
+fdim = msh.topology.dim - 1
+left_facets = mesh.locate_entities_boundary(msh, fdim, lambda x: np.isclose(x[0], 0.0))
+dofs = fem.locate_dofs_topological(V, fdim, left_facets)
 bc = fem.dirichletbc(np.array((0.0, 0.0), dtype=np.float64), dofs, V)
+
+{% if beam_load_mode == "end_traction" %}
+right_facets = mesh.locate_entities_boundary(msh, fdim, lambda x: np.isclose(x[0], L))
+facet_indices = np.hstack([left_facets, right_facets]).astype(np.int32)
+facet_markers = np.hstack(
+    [
+        np.full(left_facets.shape, 1, dtype=np.int32),
+        np.full(right_facets.shape, 2, dtype=np.int32),
+    ]
+)
+order = np.argsort(facet_indices)
+facet_tags = mesh.meshtags(msh, fdim, facet_indices[order], facet_markers[order])
+ds = ufl.Measure("ds", domain=msh, subdomain_data=facet_tags)
+traction = fem.Constant(msh, PETSc.ScalarType(({{ traction_x }}, {{ traction_y }})))
+L_form = ufl.inner(traction, v) * ds(2)
+{% else %}
+body_force = fem.Constant(msh, PETSc.ScalarType(({{ body_force_x }}, {{ body_force_y }})))
+L_form = ufl.inner(body_force, v) * ufl.dx
+{% endif %}
 
 problem = LinearProblem(a, L_form, bcs=[bc])
 w = problem.solve()
@@ -60,7 +77,8 @@ vm_out_expr = fem.Expression(sigma_vm, W_out.element.interpolation_points())
 vm_out = fem.Function(W_out)
 vm_out.interpolate(vm_out_expr)
 
-local_max_deflection = np.max(np.abs(w.x.array)) if w.x.array.size else 0.0
+disp_values = w.x.array.real.reshape((-1, msh.geometry.dim)) if w.x.array.size else np.zeros((0, msh.geometry.dim))
+local_max_deflection = np.max(np.linalg.norm(disp_values, axis=1)) if disp_values.size else 0.0
 local_max_stress = np.max(vm_h.x.array.real) if vm_h.x.array.size else 0.0
 max_deflection = msh.comm.allreduce(local_max_deflection, op=MPI.MAX)
 max_stress = msh.comm.allreduce(local_max_stress, op=MPI.MAX)

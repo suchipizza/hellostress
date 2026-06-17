@@ -60,3 +60,33 @@ def test_validator_rejects_invalid_boundary_condition(sample_beam_spec) -> None:
 
     with pytest.raises(SpecValidationError):
         SimulationSpecValidator().validate(sample_beam_spec)
+
+
+def test_validator_accepts_bracket_screening_spec() -> None:
+    spec = SimulationSpec(
+        prompt="bracket",
+        geometry=GeometryType.BRACKET,
+        length=0.12,
+        beam_section=BeamSection(height=0.01, width=0.04),
+        boundary_condition="fixed",
+        loads=[LoadCase(load_type=LoadType.POINT, magnitude=2000.0, units="N")],
+        material=DEFAULT_MATERIALS["steel"],
+        metadata={"analysis_mode": "analytical_screening"},
+    )
+
+    assert SimulationSpecValidator().validate(spec) is spec
+
+
+def test_validator_accepts_plate_with_hole_screening_spec() -> None:
+    spec = SimulationSpec(
+        prompt="plate with hole",
+        geometry=GeometryType.PLATE_WITH_HOLE,
+        length=0.4,
+        plate_dimensions=PlateDimensions(width=0.2, thickness=0.008),
+        boundary_condition="fixed",
+        loads=[LoadCase(load_type=LoadType.PRESSURE, magnitude=40_000_000.0, direction="+x", units="Pa")],
+        material=DEFAULT_MATERIALS["aluminum"],
+        metadata={"hole_diameter_m": 0.04, "analysis_mode": "analytical_screening"},
+    )
+
+    assert SimulationSpecValidator().validate(spec) is spec

@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+feacopilot.egg-info/
+tmp-runs/
+examples/**/output/

@@ -1,0 +1,7 @@
+{
+  "status": "completed",
+  "solver_mode": "mock",
+  "geometry": "beam",
+  "max_deflection_m": 0.00003,
+  "max_stress_pa": 900000.0
+}
