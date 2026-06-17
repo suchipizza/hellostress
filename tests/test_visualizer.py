@@ -123,7 +123,10 @@ def test_visualizer_builds_solver_field_plotly_and_pyvista_views(tmp_path: Path)
         values=[[1.0], [2.0], [3.0], [4.0]],
     )
 
-    visualization = SimulationVisualizer().build_visualization(
+    visualizer = SimulationVisualizer()
+    visualizer._build_pyvista_image = lambda field_data: [[[0, 0, 0]]]  # type: ignore[method-assign]
+
+    visualization = visualizer.build_visualization(
         build_beam_spec(),
         {"max_deflection": 0.02, "max_stress": 4.0},
         artifacts,
@@ -132,8 +135,45 @@ def test_visualizer_builds_solver_field_plotly_and_pyvista_views(tmp_path: Path)
     assert visualization.source == "solver_field"
     assert visualization.plotly_figure.data[0].type == "mesh3d"
     assert visualization.pyvista_image is not None
-    assert visualization.pyvista_image.shape[2] == 3
+    assert visualization.pyvista_image[0][0] == [0, 0, 0]
     assert visualization.warnings == []
+
+
+def test_visualizer_records_pyvista_warning_without_failing_plotly_view(tmp_path: Path) -> None:
+    artifacts = build_artifacts(tmp_path)
+    write_field_file(
+        artifacts.results_dir / "displacement.xdmf",
+        attribute_type="Vector",
+        values=[
+            [0.0, 0.0, 0.0],
+            [0.0, -0.01, 0.0],
+            [0.0, -0.02, 0.0],
+            [0.0, -0.01, 0.0],
+        ],
+    )
+    write_field_file(
+        artifacts.results_dir / "stress.xdmf",
+        attribute_type="Scalar",
+        values=[[1.0], [2.0], [3.0], [4.0]],
+    )
+
+    visualizer = SimulationVisualizer()
+
+    def raise_render_error(field_data) -> None:
+        raise RuntimeError("headless render unavailable")
+
+    visualizer._build_pyvista_image = raise_render_error  # type: ignore[method-assign]
+
+    visualization = visualizer.build_visualization(
+        build_beam_spec(),
+        {"max_deflection": 0.02, "max_stress": 4.0},
+        artifacts,
+    )
+
+    assert visualization.source == "solver_field"
+    assert visualization.plotly_figure.data[0].type == "mesh3d"
+    assert visualization.pyvista_image is None
+    assert visualization.warnings == ["PyVista preview unavailable: headless render unavailable"]
 
 
 def test_visualizer_falls_back_to_estimated_plot_when_field_files_are_missing(tmp_path: Path) -> None:
